@@ -1,0 +1,94 @@
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.models import FollowUpStatus, IntentLevel, LeadStatus, Priority, ProductFit
+
+
+class LeadCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    company: str = Field(min_length=1, max_length=255)
+    company_size: str | None = Field(default=None, max_length=64)
+    source: str = Field(default="unknown", max_length=64)
+    message: str = Field(min_length=1)
+    external_id: str | None = Field(default=None, max_length=128)
+    assigned_to: str | None = Field(default=None, max_length=255)
+
+
+class WebhookLeadPayload(LeadCreate):
+    pass
+
+
+class LeadUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    email: EmailStr | None = None
+    company: str | None = Field(default=None, min_length=1, max_length=255)
+    company_size: str | None = Field(default=None, max_length=64)
+    source: str | None = Field(default=None, max_length=64)
+    message: str | None = Field(default=None, min_length=1)
+    assigned_to: str | None = Field(default=None, max_length=255)
+    status: LeadStatus | None = None
+    follow_up_status: FollowUpStatus | None = None
+
+
+class AIQualificationResult(BaseModel):
+    """Strict schema for LLM qualification output. Backend still recomputes priority."""
+
+    industry: str = Field(min_length=1, max_length=128)
+    intent: IntentLevel
+    product_fit: ProductFit
+    priority: Priority
+    pain_points: list[str] = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    recommended_next_action: str = Field(min_length=1)
+
+
+class LeadResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    external_id: str | None
+    name: str
+    email: EmailStr
+    company: str
+    company_size: str | None
+    source: str
+    message: str
+    industry: str | None
+    intent: IntentLevel | None
+    product_fit: ProductFit | None
+    priority: Priority | None
+    status: LeadStatus
+    ai_summary: str | None
+    pain_points: list[str] | None
+    recommended_next_action: str | None
+    assigned_to: str | None
+    qualification_error: str | None
+    follow_up_due_at: datetime | None
+    follow_up_status: FollowUpStatus
+    draft_message: str | None
+    approved_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class FollowUpDraftResponse(BaseModel):
+    lead_id: int
+    follow_up_status: FollowUpStatus
+    draft_message: str
+    follow_up_due_at: datetime | None
+
+
+class FollowUpApproveResponse(BaseModel):
+    lead_id: int
+    follow_up_status: FollowUpStatus
+    approved_at: datetime
+    send_result: str
+    status: LeadStatus
+
+
+class HealthResponse(BaseModel):
+    status: str
+    openai: str
+    telegram: str

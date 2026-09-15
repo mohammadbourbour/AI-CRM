@@ -1,0 +1,12 @@
+{
+  "seed": 42,
+  "valid_leads": 110,
+  "duplicate_posts": 8,
+  "malformed_records": 10,
+  "batch_items": 128,
+  "notes": [
+    "No priority/intent labels are stored. The workflow classifies at runtime.",
+    "industry_hint describes the fictional company, not a model target.",
+    "All contacts use .example domains and synthetic names."
+  ]
+}

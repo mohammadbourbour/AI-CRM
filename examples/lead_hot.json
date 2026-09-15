@@ -1,0 +1,9 @@
+{
+  "external_id": "demo-hot-001",
+  "name": "John Smith",
+  "email": "john@northwind.example",
+  "company": "Northwind Energy",
+  "company_size": "500-1000",
+  "source": "website",
+  "message": "We are evaluating an AI solution for predictive maintenance across multiple facilities."
+}

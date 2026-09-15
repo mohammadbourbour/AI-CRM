@@ -1,0 +1,1719 @@
+{
+  "name": "Lead Qualification",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1. Intake & validation\nReject bad payloads before CRM or LLM calls.",
+        "width": 420,
+        "height": 200,
+        "color": 5
+      },
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Group: Intake",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -120,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Optional enrichment\nLocal domain/seniority only. No fake Clearbit success.",
+        "width": 380,
+        "height": 160,
+        "color": 6
+      },
+      "id": "00000000-0000-4000-8000-000000000002",
+      "name": "Group: Enrichment",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        420,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. AI qualification\nOfficial AI Agent + OpenAI Chat Model, Gemini Chat Model fallback.\nSkipped honestly when keys/credentials are missing.",
+        "width": 820,
+        "height": 180,
+        "color": 6
+      },
+      "id": "00000000-0000-4000-8000-000000000003",
+      "name": "Group: AI qualification",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4. CRM orchestration\nBackend is source of truth for persist, qualify, priority.\nHTTP Request stays here (no official FastAPI node).",
+        "width": 560,
+        "height": 180,
+        "color": 4
+      },
+      "id": "00000000-0000-4000-8000-000000000004",
+      "name": "Group: CRM",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 5. Routing & HITL\nHot: draft only. Official Telegram node for sales alert.\nCustomer WhatsApp waits for `/webhook/lead-approve`.",
+        "width": 620,
+        "height": 180,
+        "color": 3
+      },
+      "id": "00000000-0000-4000-8000-000000000005",
+      "name": "Group: Routing HITL",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Error / review\nInvalid payload, CRM errors, and failed `/qualify` stay on this row.",
+        "width": 640,
+        "height": 140,
+        "color": 1
+      },
+      "id": "00000000-0000-4000-8000-000000000006",
+      "name": "Group: Error review",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Human approval webhook\nPOST /webhook/lead-approve `{lead_id}` after a draft exists.\nOfficial WhatsApp node; Resend stays HTTP (no first-party node).",
+        "width": 780,
+        "height": 180,
+        "color": 2
+      },
+      "id": "00000000-0000-4000-8000-000000000007",
+      "name": "Group: Approve webhook",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        980
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000010",
+      "name": "Lead Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "webhookId": "lead-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst body = item.body && typeof item.body === 'object' ? item.body : item;\nconst errors = [];\nconst name = typeof body.name === 'string' ? body.name.trim() : '';\nconst emailRaw = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';\nconst company = typeof body.company === 'string' ? body.company.trim() : '';\nconst message = typeof body.message === 'string' ? body.message.trim() : '';\nif (!name) errors.push('name is required');\nif (!company) errors.push('company is required');\nif (!message) errors.push('message is required');\nif (!emailRaw || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(emailRaw)) errors.push('valid email is required');\nconst known = new Set(['website', 'form', 'webhook', 'referral', 'outbound', 'linkedin', 'unknown']);\nlet source = typeof body.source === 'string' ? body.source.trim().toLowerCase() : 'unknown';\nif (!known.has(source)) source = 'unknown';\nconst lead = { name, email: emailRaw, company, message, source };\nconst companySize = body.company_size ? String(body.company_size).trim() : '';\nconst externalId = body.external_id ? String(body.external_id).trim() : '';\nconst assignedTo = body.assigned_to ? String(body.assigned_to).trim() : '';\nif (companySize) lead.company_size = companySize;\nif (externalId) lead.external_id = externalId;\nif (assignedTo) lead.assigned_to = assignedTo;\nreturn [{ json: { valid: errors.length === 0, errors, lead, context: { job_title: body.job_title || null } } }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000011",
+      "name": "Validate Incoming Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-12",
+              "leftValue": "={{ $json.valid }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000012",
+      "name": "Payload Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  outcome: 'validation_failed',\n  skipped: true,\n  failed: false,\n  routed: null,\n  lead_id: null,\n  errors: data.errors || ['invalid payload'],\n  review_queue: 'invalid_payload',\n  channels: { telegram_sales_alert: 'not_applicable', whatsapp: 'not_applicable', email: 'not_applicable' }\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000013",
+      "name": "Invalid Payload Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000014",
+      "name": "Respond \u2014 Validation Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst lead = data.lead;\nconst domain = (lead.email || '').includes('@') ? lead.email.split('@')[1] : '';\nconst title = (data.context && data.context.job_title) || '';\nconst t = String(title).toLowerCase();\nlet seniority = 'unknown';\nif (/(chief|cto|ceo|cfo|coo|vp|vice president|director|head|founder)/.test(t)) seniority = 'executive';\nelse if (/(manager|lead|principal|supervisor)/.test(t)) seniority = 'manager';\nelse if (/(intern|student|junior)/.test(t)) seniority = 'junior';\nelse if (title) seniority = 'ic';\ndata.enrichment = {\n  email_domain: domain || null,\n  guessed_website: domain ? ('https://www.' + domain) : null,\n  job_title: title || null,\n  seniority,\n  enrichment_source: 'deterministic_local',\n  enrichment_api: 'disabled',\n};\nreturn [{ json: data }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000015",
+      "name": "Optional Lead Enrichment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst lead = data.lead;\nconst enr = data.enrichment || {};\ndata.llm_user_prompt = [\n  'Qualify this B2B sales lead. Return JSON only.',\n  'Name: ' + lead.name,\n  'Company: ' + lead.company,\n  'Company size: ' + (lead.company_size || 'unknown'),\n  'Source: ' + lead.source,\n  'Job title: ' + (enr.job_title || 'unknown'),\n  'Message: ' + lead.message\n].join('\\n');\nreturn [{ json: data }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000016",
+      "name": "Build Qualification Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-17",
+              "leftValue": "={{ $env.OPENAI_API_KEY }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000017",
+      "name": "OpenAI Key Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Build Qualification Prompt').item.json.llm_user_prompt }}",
+        "options": {
+          "systemMessage": "You are a B2B sales qualification assistant. Do not invent contact details or URLs. Return JSON only with keys industry, intent (low|medium|high), product_fit (unknown|low|medium|high), priority (cold|warm|hot), pain_points (array of strings), summary, recommended_next_action."
+        }
+      },
+      "id": "00000000-0000-4000-8000-000000000018",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1420,
+        160
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "00000000-0000-4000-8000-000000000019",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1420,
+        340
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-account",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst output = res.output !== undefined ? res.output : (res.text !== undefined ? res.text : null);\nconst usable = output !== undefined && output !== null && String(output).trim() !== '' && !res.error;\nreturn [{ json: { ...res, openai_usable: usable, llm_provider: 'openai' } }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000020",
+      "name": "Inspect OpenAI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-21",
+              "leftValue": "={{ $json.openai_usable }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000021",
+      "name": "OpenAI Response Usable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1920,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-22",
+              "leftValue": "={{ $env.GEMINI_API_KEY }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000022",
+      "name": "Gemini Key Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Build Qualification Prompt').item.json.llm_user_prompt }}",
+        "options": {
+          "systemMessage": "You are a B2B sales qualification assistant. Do not invent contact details or URLs. Return JSON only with keys industry, intent (low|medium|high), product_fit (unknown|low|medium|high), priority (cold|warm|hot), pain_points (array of strings), summary, recommended_next_action."
+        }
+      },
+      "id": "00000000-0000-4000-8000-000000000023",
+      "name": "AI Agent \u2014 Gemini Fallback",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1420,
+        500
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "00000000-0000-4000-8000-000000000024",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        680
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "google-gemini-account",
+          "name": "Google Gemini(PaLM) Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nreturn [{ json: { ...res, llm_provider: 'gemini' } }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000025",
+      "name": "Inspect Gemini Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const enrich = $('Optional Lead Enrichment').first().json;\nreturn [{ json: { ...enrich, llm_skipped: true, llm_provider: 'skipped_unconfigured' } }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000026",
+      "name": "Mark LLM Skipped",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        780
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function extractJson(text) {\n  if (!text) return null;\n  if (typeof text === 'object') return text;\n  const trimmed = String(text).trim();\n  try { return JSON.parse(trimmed); } catch (e) {}\n  const start = trimmed.indexOf('{');\n  const end = trimmed.lastIndexOf('}');\n  if (start >= 0 && end > start) {\n    try { return JSON.parse(trimmed.slice(start, end + 1)); } catch (e) {}\n  }\n  return null;\n}\nconst input = $input.first().json;\nconst base = $('Optional Lead Enrichment').first().json;\nlet provider = input.llm_provider || 'skipped_unconfigured';\nlet qualification = null;\nlet parseError = null;\nlet valid = false;\nif (input.llm_skipped || provider === 'skipped_unconfigured') {\n  provider = 'skipped_unconfigured';\n  parseError = null;\n} else {\n  let parsed = null;\n  if (input.industry && input.intent && input.priority) parsed = input;\n  else if (input.output && typeof input.output === 'object') parsed = input.output;\n  else parsed = extractJson(input.output !== undefined ? input.output : input.text);\n  const required = ['industry', 'intent', 'product_fit', 'priority', 'pain_points', 'summary', 'recommended_next_action'];\n  if (!parsed || typeof parsed !== 'object') parseError = 'LLM did not return JSON';\n  else {\n    const missing = required.filter((k) => parsed[k] === undefined || parsed[k] === null || parsed[k] === '');\n    if (missing.length) parseError = 'missing fields: ' + missing.join(',');\n    else if (!['low', 'medium', 'high'].includes(parsed.intent)) parseError = 'invalid intent';\n    else if (!['unknown', 'low', 'medium', 'high'].includes(parsed.product_fit)) parseError = 'invalid product_fit';\n    else if (!['cold', 'warm', 'hot'].includes(parsed.priority)) parseError = 'invalid priority';\n    else if (!Array.isArray(parsed.pain_points) || parsed.pain_points.length < 1) parseError = 'pain_points required';\n    else { valid = true; qualification = parsed; }\n  }\n}\nreturn [{ json: {\n  ...base,\n  ai_prequalify: { provider, valid, qualification, parse_error: parseError }\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000027",
+      "name": "Parse & Validate LLM JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/webhooks/leads' }}",
+        "options": {
+          "timeout": 15000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "={{ $env.WEBHOOK_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.lead }}"
+      },
+      "id": "00000000-0000-4000-8000-000000000028",
+      "name": "Create Lead in CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-29",
+              "leftValue": "={{ Boolean($json.id) }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000029",
+      "name": "CRM Create OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2620,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nreturn [{ json: {\n  outcome: 'failed',\n  skipped: false,\n  failed: true,\n  review_queue: 'crm_create_failed',\n  errors: [res.message || res.error || res.detail || 'CRM create failed'],\n  lead_id: null,\n  channels: { telegram_sales_alert: 'not_applicable', whatsapp: 'not_applicable', email: 'not_applicable' }\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000030",
+      "name": "CRM Create Failed Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2840,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000031",
+      "name": "Respond \u2014 CRM Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3080,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id + '/qualify' }}",
+        "options": {
+          "timeout": 45000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "00000000-0000-4000-8000-000000000032",
+      "name": "Backend Qualify Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2840,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst body = res.body || res;\nconst code = res.statusCode || (res.error && res.error.httpCode) || 0;\nconst hasId = body && body.id !== undefined && body.id !== null;\nconst failedFlag = Boolean(body && body.qualification_error) || Boolean(res.error);\nconst ok = hasId && !failedFlag && (code === 0 || (code >= 200 && code < 300));\nreturn [{ json: { ...(hasId ? body : { detail: body && body.detail }), _qualify_ok: ok, _qualify_status: code || (ok ? 200 : 503) } }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000033",
+      "name": "Normalize Qualify Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3060,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-34",
+              "leftValue": "={{ $json._qualify_ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000034",
+      "name": "Qualify Succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3280,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const created = $('Create Lead in CRM').first().json;\nconst qualify = $input.first().json;\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nconst detail = qualify.body && qualify.body.detail ? qualify.body.detail : (qualify.detail || 'qualification failed');\nreturn [{ json: {\n  outcome: 'qualification_failed',\n  skipped: false,\n  failed: true,\n  review_queue: 'ai_qualification_failed',\n  lead_id: created.id,\n  external_id: created.external_id,\n  status: created.status,\n  qualification_error: created.qualification_error || String(detail),\n  ai_prequalify: pre,\n  errors: [String(detail)],\n  channels: { telegram_sales_alert: 'not_applicable', whatsapp: 'not_applicable', email: 'not_applicable' }\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000035",
+      "name": "Qualification Failed Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3500,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000036",
+      "name": "Respond \u2014 Qualification Review",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3740,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000037",
+      "name": "Get CRM Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3500,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-38",
+              "leftValue": "={{ $json.priority }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "hot"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000038",
+      "name": "Priority Is Hot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id + '/followup/draft' }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "00000000-0000-4000-8000-000000000039",
+      "name": "Draft Follow-up (HITL)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3940,
+        160
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Get CRM Lead').first().json;\nconst alerts = String($env.N8N_TELEGRAM_ALERTS || '').toLowerCase() === 'true';\nconst chat = $env.TELEGRAM_CHAT_ID;\nconst enabled = alerts && Boolean(chat);\nconst text = [\n  'HOT lead (n8n sales alert)',\n  'CRM id: ' + lead.id,\n  'Name: ' + lead.name,\n  'Company: ' + lead.company,\n  'Priority: ' + lead.priority,\n  'Summary: ' + (lead.ai_summary || ''),\n  'Next: ' + (lead.recommended_next_action || ''),\n  'Customer follow-up is waiting for human approval. Do not treat this as a sent message.'\n].join('\\n');\nreturn [{ json: {\n  telegram_action: enabled ? 'send' : 'skip',\n  telegram_reason: enabled ? 'configured' : (alerts ? 'missing TELEGRAM_CHAT_ID' : 'N8N_TELEGRAM_ALERTS is not true'),\n  telegram_chat_id: chat || '',\n  telegram_text: text\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000040",
+      "name": "Plan Telegram Sales Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4160,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-41",
+              "leftValue": "={{ $json.telegram_action }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "send"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000041",
+      "name": "Send Telegram Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4380,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_chat_id }}",
+        "text": "={{ $json.telegram_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "00000000-0000-4000-8000-000000000042",
+      "name": "Send a text message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4600,
+        80
+      ],
+      "webhookId": "9cabb5ed-5a9f-414c-bda8-54e977e5c6b8",
+      "credentials": {
+        "telegramApi": {
+          "id": "SRDVCdkvP7R2ebhu",
+          "name": "Telegram account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $('Get CRM Lead').first().json;\nconst draft = safe('Draft Follow-up (HITL)');\nconst plan = safe('Plan Telegram Sales Alert');\nconst sent = safe('Send a text message');\nlet telegramStatus = 'skipped_unconfigured';\nif (plan.telegram_action === 'send') {\n  telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';\n} else {\n  telegramStatus = 'skipped_unconfigured';\n}\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: 'hot',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: draft.follow_up_status || lead.follow_up_status,\n  human_approval_required: true,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: telegramStatus,\n    whatsapp: 'awaiting_human_approval',\n    email: 'awaiting_human_approval'\n  },\n  errors: []\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000043",
+      "name": "Assemble Hot Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4840,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000044",
+      "name": "Respond \u2014 Hot Processed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        5080,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.first().json;\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: lead.priority || 'unknown',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: lead.follow_up_status,\n  human_approval_required: false,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: 'not_applicable',\n    whatsapp: 'skipped_not_hot',\n    email: 'skipped_not_hot'\n  },\n  errors: []\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000045",
+      "name": "Assemble Non-Hot Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3940,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000046",
+      "name": "Respond \u2014 Routed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4180,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-approve",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000050",
+      "name": "Human Approve Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1200
+      ],
+      "webhookId": "lead-approve"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + ($json.body.lead_id || $json.lead_id) }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000051",
+      "name": "Load Lead For Approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-52",
+              "leftValue": "={{ $json.follow_up_status }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "awaiting_approval"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000052",
+      "name": "Draft Ready For Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.first().json;\nreturn [{ json: {\n  outcome: 'approval_blocked',\n  skipped: true,\n  failed: false,\n  lead_id: lead.id,\n  follow_up_status: lead.follow_up_status,\n  errors: ['Follow-up cannot be sent until a draft exists and a human approves it'],\n  channels: { telegram_sales_alert: 'not_applicable', whatsapp: 'not_sent', email: 'not_sent' }\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000053",
+      "name": "Respond Body \u2014 Approval Blocked",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000054",
+      "name": "Respond \u2014 Approval Blocked",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id + '/approve-followup' }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000055",
+      "name": "Approve Follow-up in CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const approved = $input.first().json;\nconst lead = $('Load Lead For Approval').first().json;\nconst waPhone = $env.WHATSAPP_PHONE_NUMBER_ID;\nconst waTo = $env.WHATSAPP_TO;\nconst resend = $env.RESEND_API_KEY;\nconst emailFrom = $env.EMAIL_FROM;\nconst emailTo = lead.email;\nconst draft = lead.draft_message || '';\nconst waEnabled = Boolean(waPhone && waTo);\nconst emailEnabled = Boolean(resend && emailFrom && emailTo);\nreturn [{ json: {\n  approved,\n  lead_id: lead.id,\n  draft,\n  whatsapp_action: waEnabled ? 'send' : 'skip',\n  whatsapp_reason: waEnabled ? 'configured' : 'WhatsApp adapter unconfigured (n8n WhatsApp credential + WHATSAPP_PHONE_NUMBER_ID + WHATSAPP_TO)',\n  whatsapp_phone_number_id: waPhone || '',\n  whatsapp_to: waTo || '',\n  email_action: emailEnabled ? 'send' : 'skip',\n  email_reason: emailEnabled ? 'configured' : 'Email adapter unconfigured (RESEND_API_KEY, EMAIL_FROM)',\n  email_request: emailEnabled ? {\n    from: emailFrom,\n    to: [emailTo],\n    subject: 'Follow-up regarding ' + lead.company,\n    text: draft\n  } : null\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000056",
+      "name": "Plan Optional Delivery Adapters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-57",
+              "leftValue": "={{ $json.whatsapp_action }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "send"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000057",
+      "name": "WhatsApp Adapter Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $json.whatsapp_phone_number_id }}",
+        "recipientPhoneNumber": "={{ $json.whatsapp_to }}",
+        "textBody": "={{ $json.draft }}",
+        "additionalFields": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000058",
+      "name": "Send message",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        1000
+      ],
+      "webhookId": "a001fd79-a969-489c-8660-c88e2b81c466",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "whatsapp-account",
+          "name": "WhatsApp account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-59",
+              "leftValue": "={{ $('Plan Optional Delivery Adapters').item.json.email_action }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "send"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000059",
+      "name": "Email Adapter Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "options": {
+          "timeout": 15000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.RESEND_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Plan Optional Delivery Adapters').item.json.email_request }}"
+      },
+      "id": "00000000-0000-4000-8000-000000000060",
+      "name": "Send Email via Resend (optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1440
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst plan = $('Plan Optional Delivery Adapters').first().json;\nconst wa = safe('Send message');\nconst em = safe('Send Email via Resend (optional)');\nlet waStatus = plan.whatsapp_action === 'send' ? ((wa.messages || wa.ok || wa.id) ? 'sent' : 'failed') : 'skipped_unconfigured';\nlet emStatus = plan.email_action === 'send' ? ((em.id || em.ok) ? 'sent' : 'failed') : 'skipped_unconfigured';\nif (plan.whatsapp_action === 'send' && wa.error) waStatus = 'failed';\nif (plan.email_action === 'send' && em.error) emStatus = 'failed';\nreturn [{ json: {\n  outcome: 'approved',\n  lead_id: plan.lead_id,\n  crm_send_result: plan.approved.send_result || null,\n  follow_up_status: plan.approved.follow_up_status,\n  channels: {\n    backend_mock_send: plan.approved.send_result || 'unknown',\n    whatsapp: waStatus,\n    email: emStatus,\n    telegram_sales_alert: 'not_applicable'\n  },\n  notes: [\n    'Customer-facing WhatsApp/email run only after explicit human approval.',\n    'Unconfigured adapters are skipped, not marked successful.'\n  ],\n  errors: []\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000061",
+      "name": "Assemble Approval Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000062",
+      "name": "Respond \u2014 Approval Complete",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        1200
+      ]
+    }
+  ],
+  "connections": {
+    "Lead Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Incoming Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Incoming Lead": {
+      "main": [
+        [
+          {
+            "node": "Payload Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valid?": {
+      "main": [
+        [
+          {
+            "node": "Optional Lead Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Payload Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalid Payload Review": {
+      "main": [
+        [
+          {
+            "node": "Respond \u2014 Validation Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optional Lead Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Build Qualification Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Qualification Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Key Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Key Present?": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini Key Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Inspect OpenAI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inspect OpenAI Response": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Response Usable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Response Usable?": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate LLM JSON",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini Key Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Key Present?": {
+      "main": [
+        [
+          {
+            "node": "AI Agent \u2014 Gemini Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark LLM Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent \u2014 Gemini Fallback": {
+      "main": [
+        [
+          {
+            "node": "Inspect Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inspect Gemini Response": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate LLM JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark LLM Skipped": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate LLM JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Validate LLM JSON": {
+      "main": [
+        [
+          {
+            "node": "Create Lead in CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Lead in CRM": {
+      "main": [
+        [
+          {
+            "node": "CRM Create OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Create OK?": {
+      "main": [
+        [
+          {
+            "node": "Backend Qualify Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM Create Failed Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Create Failed Review": {
+      "main": [
+        [
+          {
+            "node": "Respond \u2014 CRM Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend Qualify Lead": {
+      "main": [
+        [
+          {
+            "node": "Normalize Qualify Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Qualify Response": {
+      "main": [
+        [
+          {
+            "node": "Qualify Succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualify Succeeded?": {
+      "main": [
+        [
+          {
+            "node": "Get CRM Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Qualification Failed Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualification Failed Review": {
+      "main": [
+        [
+          {
+            "node": "Respond \u2014 Qualification Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get CRM Lead": {
+      "main": [
+        [
+          {
+            "node": "Priority Is Hot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Priority Is Hot?": {
+      "main": [
+        [
+          {
+            "node": "Draft Follow-up (HITL)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assemble Non-Hot Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Follow-up (HITL)": {
+      "main": [
+        [
+          {
+            "node": "Plan Telegram Sales Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Telegram Sales Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assemble Hot Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Assemble Hot Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Hot Result": {
+      "main": [
+        [
+          {
+            "node": "Respond \u2014 Hot Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Non-Hot Result": {
+      "main": [
+        [
+          {
+            "node": "Respond \u2014 Routed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Human Approve Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load Lead For Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Lead For Approval": {
+      "main": [
+        [
+          {
+            "node": "Draft Ready For Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Ready For Send?": {
+      "main": [
+        [
+          {
+            "node": "Approve Follow-up in CRM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Body \u2014 Approval Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Body \u2014 Approval Blocked": {
+      "main": [
+        [
+          {
+            "node": "Respond \u2014 Approval Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve Follow-up in CRM": {
+      "main": [
+        [
+          {
+            "node": "Plan Optional Delivery Adapters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Optional Delivery Adapters": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Adapter Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Adapter Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Adapter Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message": {
+      "main": [
+        [
+          {
+            "node": "Email Adapter Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Adapter Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Send Email via Resend (optional)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assemble Approval Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email via Resend (optional)": {
+      "main": [
+        [
+          {
+            "node": "Assemble Approval Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Approval Result": {
+      "main": [
+        [
+          {
+            "node": "Respond \u2014 Approval Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent \u2014 Gemini Fallback",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "isArchived": false,
+  "id": "a1a1a1a1-b2b2-4c3c-8d4d-e5e5e5e5e5e5",
+  "versionId": "a2a2a2a2-b2b2-4c3c-8d4d-e5e5e5e5e5e5",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
