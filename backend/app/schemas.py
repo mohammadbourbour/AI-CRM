@@ -90,6 +90,13 @@ class FollowUpApproveResponse(BaseModel):
     status: LeadStatus
 
 
+class FollowUpRejectResponse(BaseModel):
+    lead_id: int
+    follow_up_status: FollowUpStatus
+    status: LeadStatus
+    decision: str = "rejected"
+
+
 class HealthResponse(BaseModel):
     status: str
     openai: str

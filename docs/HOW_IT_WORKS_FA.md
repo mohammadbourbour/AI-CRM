@@ -120,7 +120,7 @@ curl.exe -s -X POST http://localhost:8000/api/leads/1/qualify
 # 3) draft
 curl.exe -s -X POST http://localhost:8000/api/leads/1/followup/draft
 
-# 4) approve
+# 4) approve  (یا reject: /api/leads/1/reject-followup)
 curl.exe -s -X POST http://localhost:8000/api/leads/1/approve-followup
 ```
 

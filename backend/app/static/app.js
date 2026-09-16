@@ -5,6 +5,7 @@ const boardEl = document.getElementById("board");
 const healthEl = document.getElementById("health");
 
 let metaStages = [];
+let currentLeadId = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,7 +16,8 @@ async function fetchJson(url, options) {
   if (response.status === 204) return null;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body.detail || response.statusText);
+    const detail = Array.isArray(body.detail) ? JSON.stringify(body.detail) : body.detail;
+    throw new Error(detail || response.statusText);
   }
   return body;
 }
@@ -52,17 +54,30 @@ function appendTimeline(stage) {
   timelineEl.prepend(item);
 }
 
+function hitlButtons(lead) {
+  if (!lead || lead.follow_up_status !== "awaiting_approval") return "";
+  return `<div class="hitl">
+      <button type="button" class="accept" data-decision="accept">قبول پیش‌نویس</button>
+      <button type="button" class="reject" data-decision="reject">رد پیش‌نویس</button>
+    </div>`;
+}
+
 function renderResult(run) {
   const lead = run.lead;
+  currentLeadId = lead ? lead.id : null;
   if (!lead) {
-    resultEl.className = "result empty";
-    resultEl.textContent = "اجرا بدون لید تمام شد.";
+    resultEl.className = "result";
+    const failed = (run.stages || []).find((stage) => stage.status === "failed");
+    resultEl.innerHTML = `<span class="badge rejected">REJECTED</span>
+      <h3>ورود رد شد — به CRM نرسید</h3>
+      <p>${failed ? failed.detail : "payload نامعتبر"}</p>
+      <p class="telegram">این همان گیت داده خراب است: کار تکراری ورود دستی و داده ناقص حذف می‌شود.</p>`;
     return;
   }
   const priority = lead.priority || "n/a";
   resultEl.className = "result";
   resultEl.innerHTML = `
-    <span class="badge ${priority}">${priority.toUpperCase()}</span>
+    <span class="badge ${priority}">${String(priority).toUpperCase()}</span>
     <h3>${lead.name} — ${lead.company}</h3>
     <dl>
       <dt>CRM</dt><dd>#${lead.id} · ${lead.status}</dd>
@@ -73,16 +88,19 @@ function renderResult(run) {
       <dt>Follow-up</dt><dd>${lead.follow_up_status}</dd>
     </dl>
     ${lead.draft_message ? `<div class="draft">${lead.draft_message}</div>` : ""}
+    ${hitlButtons(lead)}
     <div class="telegram">تلگرام کانال: <b>${run.telegram_status}</b></div>
   `;
+  resultEl.querySelectorAll("[data-decision]").forEach((button) => {
+    button.addEventListener("click", () => decideFollowup(button.dataset.decision));
+  });
 }
 
 function renderBoard(leads) {
   const groups = { hot: [], warm: [], cold: [] };
   for (const lead of leads) {
-    const key = lead.priority && groups[lead.priority] ? lead.priority : "cold";
-    if (!lead.priority) continue;
-    groups[key].push(lead);
+    if (!lead.priority || !groups[lead.priority]) continue;
+    groups[lead.priority].push(lead);
   }
   const unqual = leads.filter((lead) => !lead.priority);
   boardEl.innerHTML = ["hot", "warm", "cold"]
@@ -90,23 +108,50 @@ function renderBoard(leads) {
       const cards = groups[key]
         .slice(0, 8)
         .map(
-          (lead) => `<div class="card"><b>${lead.company}</b><span>${lead.name} · ${lead.status}</span></div>`
+          (lead) =>
+            `<div class="card"><b>${lead.company}</b><span>${lead.name} · ${lead.status} · ${lead.follow_up_status}</span></div>`
         )
         .join("");
       return `<div class="column"><h3>${key.toUpperCase()} (${groups[key].length})</h3>${cards || "<span>خالی</span>"}</div>`;
     })
     .join("");
   if (unqual.length) {
-    boardEl.insertAdjacentHTML(
-      "beforeend",
-      `<p class="lede">${unqual.length} لید هنوز qualify نشده‌اند.</p>`
-    );
+    boardEl.insertAdjacentHTML("beforeend", `<p class="lede">${unqual.length} لید هنوز qualify نشده‌اند.</p>`);
   }
 }
 
 async function loadBoard() {
   const leads = await fetchJson("/api/leads");
   renderBoard(leads);
+}
+
+async function decideFollowup(decision) {
+  if (!currentLeadId) return;
+  const path = decision === "accept" ? "approve-followup" : "reject-followup";
+  try {
+    await fetchJson(`/api/leads/${currentLeadId}/${path}`, { method: "POST" });
+    const lead = await fetchJson(`/api/leads/${currentLeadId}`);
+    resultEl.querySelectorAll(".hitl").forEach((el) => el.remove());
+    resultEl.querySelectorAll("dt").forEach((dt) => {
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      if (dt.textContent === "CRM") dd.textContent = `#${lead.id} · ${lead.status}`;
+      if (dt.textContent === "Follow-up") dd.textContent = lead.follow_up_status;
+    });
+    const note = document.createElement("div");
+    note.className = "telegram";
+    note.innerHTML =
+      decision === "accept"
+        ? `<b>قبول شد.</b> mock_sent · CRM: ${lead.status} — ارسال مشتری فقط بعد از این تأیید معنا دارد.`
+        : `<b>رد شد.</b> follow_up=${lead.follow_up_status} · پیش‌نویس برای سابقه ماند، پیام مشتری نرفت.`;
+    resultEl.appendChild(note);
+    await loadBoard();
+  } catch (err) {
+    const note = document.createElement("div");
+    note.className = "telegram";
+    note.textContent = err.message;
+    resultEl.appendChild(note);
+  }
 }
 
 async function runSample(sample) {
@@ -128,11 +173,9 @@ async function runSample(sample) {
     renderPipeline(stagesState);
     for (const stage of run.stages) {
       renderPipeline(
-        stagesState.map((item) =>
-          item.id === stage.id ? { ...stage, status: "running" } : item
-        )
+        stagesState.map((item) => (item.id === stage.id ? { ...stage, status: "running" } : item))
       );
-      await sleep(280);
+      await sleep(220);
       const index = stagesState.findIndex((item) => item.id === stage.id);
       if (index >= 0) stagesState[index] = stage;
       renderPipeline(stagesState);

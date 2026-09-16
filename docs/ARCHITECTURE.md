@@ -117,12 +117,12 @@ Follow-up `follow_up_status`:
 
 ```
 not_started → awaiting_approval → approved → sent
-                              ↘ skipped (PATCH only)
+                              ↘ skipped (reject-followup or PATCH)
 ```
 
 `draft_ready` is in the enum for completeness; the draft endpoint writes `awaiting_approval` directly.
 
-Approve then mock-send happen in one explicit human call: `POST /api/leads/{id}/approve-followup`. There is no automatic send.
+Approve then mock-send happen in one explicit human call: `POST /api/leads/{id}/approve-followup`. Reject (`POST /api/leads/{id}/reject-followup`) keeps the draft for audit, sets `skipped`, and never sends. There is no automatic send.
 
 ## Providers
 

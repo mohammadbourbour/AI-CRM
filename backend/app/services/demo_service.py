@@ -103,6 +103,14 @@ SAMPLES: dict[str, dict[str, str]] = {
         "message": "Just browsing. Can you send general pricing information?",
         "job_title": "Intern",
     },
+    "invalid": {
+        "name": " ",
+        "email": "not-an-email",
+        "company": "",
+        "source": "website",
+        "message": "",
+        "job_title": "",
+    },
 }
 
 
@@ -157,6 +165,15 @@ def enrich_contact(email: str, job_title: str | None) -> dict[str, Any]:
 def _payload_from_sample(sample: str) -> LeadCreate:
     raw = SAMPLES[sample]
     stamp = uuid.uuid4().hex[:8]
+    if sample == "invalid":
+        return LeadCreate.model_construct(
+            name=" ",
+            email="broken@",
+            company="",
+            message="",
+            source="website",
+            external_id=f"demo-invalid-{stamp}",
+        )
     return LeadCreate(
         name=raw["name"],
         email=raw["email"],
@@ -175,7 +192,7 @@ def run_demo(db: Session, sample: str = "hot", lead_in: LeadCreate | None = None
     chosen = "custom" if lead_in is not None else sample
     if lead_in is None:
         if sample not in SAMPLES:
-            raise ValueError(f"Unknown sample {sample!r}. Use hot, warm, or cold.")
+            raise ValueError(f"Unknown sample {sample!r}. Use hot, warm, cold, or invalid.")
         lead_in = _payload_from_sample(sample)
 
     run = PipelineRun(
@@ -199,6 +216,8 @@ def run_demo(db: Session, sample: str = "hot", lead_in: LeadCreate | None = None
         normalized = normalize_lead_payload(lead_in)
     except NormalizationError as exc:
         _set_stage(stages, "validate", "failed", str(exc))
+        for stage_id in ("enrich", "crm", "qualify", "sheets", "route", "draft", "telegram"):
+            _set_stage(stages, stage_id, "skipped", "Stopped: payload rejected before CRM write.")
         run.stages = stages
         run.status = "failed"
         run.telegram_status = "not_applicable"

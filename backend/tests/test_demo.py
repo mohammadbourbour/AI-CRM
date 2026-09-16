@@ -19,6 +19,7 @@ def test_demo_meta(client: TestClient) -> None:
     assert body["openai"] == "mock"
     assert [stage["id"] for stage in body["stages"]][-1] == "telegram"
     assert "hot" in body["samples"]
+    assert "invalid" in body["samples"]
 
 
 def test_demo_hot_run_records_every_stage(client: TestClient) -> None:
@@ -53,7 +54,18 @@ def test_demo_custom_lead(client: TestClient) -> None:
     assert response.json()["lead"]["name"] == "Dana Client"
 
 
-def test_unknown_sample_is_rejected(client: TestClient) -> None:
+def test_demo_invalid_never_creates_lead(client: TestClient) -> None:
+    before = len(client.get("/api/leads").json())
+    response = client.post("/api/demo/runs", json={"sample": "invalid"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["lead"] is None
+    assert body["telegram_status"] == "not_applicable"
+    by_id = {stage["id"]: stage for stage in body["stages"]}
+    assert by_id["validate"]["status"] == "failed"
+    assert by_id["crm"]["status"] == "skipped"
+    assert len(client.get("/api/leads").json()) == before
     response = client.post("/api/demo/runs", json={"sample": "nuclear"})
     assert response.status_code == 422
 

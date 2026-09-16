@@ -27,8 +27,37 @@ def test_followup_draft_then_approve(client: TestClient) -> None:
     assert result["status"] == "contacted"
 
 
+def test_followup_reject_requires_draft(client: TestClient) -> None:
+    lead_id = client.post("/api/leads", json={**HOT_PAYLOAD, "external_id": "hot-reject-no-draft"}).json()["id"]
+    denied = client.post(f"/api/leads/{lead_id}/reject-followup")
+    assert denied.status_code == 409
+
+
+def test_followup_draft_then_reject(client: TestClient) -> None:
+    lead_id = client.post("/api/leads", json={**HOT_PAYLOAD, "external_id": "hot-reject-ok"}).json()["id"]
+    client.post(f"/api/leads/{lead_id}/qualify")
+    client.post(f"/api/leads/{lead_id}/followup/draft")
+    rejected = client.post(f"/api/leads/{lead_id}/reject-followup")
+    assert rejected.status_code == 200
+    body = rejected.json()
+    assert body["follow_up_status"] == "skipped"
+    assert body["decision"] == "rejected"
+    stored = client.get(f"/api/leads/{lead_id}").json()
+    assert stored["status"] == "qualified"
+    assert stored["follow_up_status"] == "skipped"
+    assert stored["draft_message"]
+
+
+def test_followup_cannot_approve_after_reject(client: TestClient) -> None:
+    lead_id = client.post("/api/leads", json={**HOT_PAYLOAD, "external_id": "hot-reject-then-approve"}).json()["id"]
+    client.post(f"/api/leads/{lead_id}/qualify")
+    client.post(f"/api/leads/{lead_id}/followup/draft")
+    assert client.post(f"/api/leads/{lead_id}/reject-followup").status_code == 200
+    assert client.post(f"/api/leads/{lead_id}/approve-followup").status_code == 409
+
+
 def test_followup_cannot_approve_twice(client: TestClient) -> None:
-    lead_id = client.post("/api/leads", json=HOT_PAYLOAD).json()["id"]
+    lead_id = client.post("/api/leads", json={**HOT_PAYLOAD, "external_id": "hot-approve-twice"}).json()["id"]
     client.post(f"/api/leads/{lead_id}/qualify")
     client.post(f"/api/leads/{lead_id}/followup/draft")
     first = client.post(f"/api/leads/{lead_id}/approve-followup")

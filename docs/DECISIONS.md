@@ -50,7 +50,7 @@ HTTP Request remains only for the FastAPI CRM and Resend. There is no official R
 
 ## Human approval before send
 
-AI may write `draft_message`. The backend will not mark follow-up `sent` until `POST /api/leads/{id}/approve-followup` (or the n8n `lead-approve` webhook that calls that endpoint). Backend send is a **mock** (`mock_sent`). Real WhatsApp/email happen only if those n8n adapters are configured, after the same approval.
+AI may write `draft_message`. The backend will not mark follow-up `sent` until `POST /api/leads/{id}/approve-followup` (or the n8n `lead-approve` webhook that calls that endpoint). Human **reject** (`POST /api/leads/{id}/reject-followup`) sets `skipped`, keeps the draft for audit, and does not send. Backend send is a **mock** (`mock_sent`). Real WhatsApp/email happen only if those n8n adapters are configured, after the same approval.
 
 ## Documented gaps that stay open
 
@@ -60,6 +60,6 @@ AI may write `draft_message`. The backend will not mark follow-up `sent` until `
 ## Other constraints
 
 - SQLite, single process.
-- No frontend.
+- Demo dashboard at `GET /` is a presenter UI, not a multi-user product app.
 - Priority is never taken from the LLM as the stored value.
 - LLM output cannot execute tools or fetch arbitrary URLs.

@@ -20,7 +20,15 @@ n8n: [http://localhost:5678](http://localhost:5678)
 
 ## Client dashboard
 
-Open `/` and click **لید داغ / گرم / سرد**. Each click:
+Open `/` and click the scenario buttons. Each click is a real CRM path:
+
+| Button | Outcome |
+|--------|---------|
+| **رد اعتبارسنجی** | Invalid payload; validate fails; **no CRM row** |
+| **Cold / Warm** | Qualified with that priority; no auto-draft |
+| **Hot** | Draft stored as `awaiting_approval` |
+| **قبول پیش‌نویس** | `mock_sent`, lead `contacted` |
+| **رد پیش‌نویس** | `skipped`, lead stays `qualified`, draft kept for audit |
 
 1. Validates and enriches the lead (same steps as n8n)
 2. Writes to CRM and qualifies (backend LLM or mock + deterministic priority)
@@ -56,6 +64,8 @@ Follow-up draft (human still must approve before anything is "sent"):
 ```powershell
 curl.exe -s -X POST http://localhost:8000/api/leads/1/followup/draft
 curl.exe -s -X POST http://localhost:8000/api/leads/1/approve-followup
+# or reject instead of approve:
+# curl.exe -s -X POST http://localhost:8000/api/leads/1/reject-followup
 ```
 
 Duplicate webhook (same `external_id`) returns the existing lead:
@@ -99,4 +109,4 @@ See [examples/dataset/README.md](../examples/dataset/README.md). Classification 
 
 ## Human-in-the-loop check
 
-Calling approve **before** a draft exists must return 409. Calling approve a second time must return 409. The draft is never auto-sent.
+Calling approve or reject **before** a draft exists must return 409. Calling approve a second time, or approve after reject, must return 409. The draft is never auto-sent.

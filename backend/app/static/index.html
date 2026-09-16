@@ -15,10 +15,10 @@
   <body>
     <header class="top">
       <div>
-        <p class="eyebrow">Client demo · n8n → FastAPI CRM</p>
+        <p class="eyebrow">نمونه‌کار زنده · n8n → FastAPI CRM → Telegram</p>
         <h1>اتاق فرمان لید</h1>
         <p class="lede">
-          از لحظه ورود به وب‌هوک n8n تا نتیجه تحلیل، مسیریابی، پیش‌نویس HITL و ارسال به کانال تلگرام.
+          از ورود وب‌هوک تا قبول یا رد انسانی. هر دکمه یک مسیر واقعی است: رد اعتبارسنجی، سرد، گرم، داغ + تأیید/رد پیش‌نویس.
         </p>
       </div>
       <ul class="health" id="health"></ul>
@@ -26,29 +26,41 @@
 
     <section class="controls">
       <div class="control-copy">
-        <h2>نمایش برای کارفرما</h2>
+        <h2>سناریوهای قابل توضیح</h2>
         <p>
-          هر دکمه یک لید واقعی می‌سازد، همان APIهایی که n8n صدا می‌زند را اجرا می‌کند، و مرحله‌به‌مرحله روی بوم حرکت می‌کند.
-          پیام مشتری ارسال نمی‌شود؛ نتیجه تحلیل به کانال تلگرام می‌رود اگر ربات تنظیم شده باشد.
+          این همان چرخهٔ کاری است که برای واحد فروش خودکار می‌شود: داده خراب وارد CRM نمی‌شود، مدل فقط طبقه‌بندی می‌کند،
+          اولویت را کد محاسبه می‌کند، و پیام مشتری بدون تأیید انسان ارسال نمی‌شود.
         </p>
       </div>
       <div class="buttons">
-        <button type="button" data-sample="hot">لید داغ · Hot</button>
-        <button type="button" data-sample="warm">لید گرم · Warm</button>
+        <button type="button" class="ghost" data-sample="invalid">رد اعتبارسنجی</button>
         <button type="button" data-sample="cold">لید سرد · Cold</button>
+        <button type="button" data-sample="warm">لید گرم · Warm</button>
+        <button type="button" data-sample="hot">لید داغ · Hot</button>
       </div>
     </section>
 
     <ol class="pipeline" id="pipeline"></ol>
 
-    <section class="grid">
+    <section class="grid three">
+      <article class="panel script-panel">
+        <h2>چی توضیح بدهم؟</h2>
+        <ol class="talk" id="talk">
+          <li>مسئله: لید خام از فرم/سایت بدون اولویت وارد فروش می‌شود.</li>
+          <li>n8n ارکستراسیون است؛ FastAPI منبع حقیقت CRM و امتیاز است.</li>
+          <li>اگر داده ناقص باشد، قبل از دیتابیس رد می‌شود.</li>
+          <li>خروجی LLM با اسکیما چک می‌شود؛ اولویت را مدل ذخیره نمی‌کند.</li>
+          <li>داغ → پیش‌نویس؛ انسان قبول یا رد می‌کند. مشتری هنوز پیامی نگرفته.</li>
+          <li>تلگرام نتیجه تیم فروش است؛ اگر ربات نباشد، skip صادقانه است نه موفقیت جعلی.</li>
+        </ol>
+      </article>
       <article class="panel timeline-panel">
         <h2>تایم‌لاین اجرا</h2>
         <ol id="timeline" class="timeline"></ol>
       </article>
       <article class="panel result-panel">
-        <h2>نتیجه</h2>
-        <div id="result" class="result empty">هنوز اجرایی نشده. یکی از لیدهای نمونه را بزنید.</div>
+        <h2>نتیجه و تصمیم</h2>
+        <div id="result" class="result empty">یک سناریو را اجرا کنید.</div>
       </article>
     </section>
 
@@ -58,7 +70,7 @@
     </section>
 
     <footer>
-      n8n ارکستراسیون است · FastAPI منبع حقیقت اولویت · تلگرام فقط نتیجه تیم فروش است، نه پیام مشتری
+      n8n ارکستراسیون · FastAPI منبع حقیقت · قبول/رد انسانی قبل از پیام مشتری · Git و Docker برای نگهداری
     </footer>
     <script src="/assets/app.js"></script>
   </body>

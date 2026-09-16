@@ -194,7 +194,9 @@ Full notes: [n8n/README.md](n8n/README.md)
 
 ## Demo
 
-Open the client dashboard at [http://localhost:8000](http://localhost:8000) and run Hot / Warm / Cold. The board plays the same CRM path n8n uses, then posts the analysis result to a Telegram channel if the bot is configured.
+Open the client dashboard at [http://localhost:8000](http://localhost:8000) and run **invalid / Cold / Warm / Hot**, then accept or reject the hot draft. The board plays the same CRM path n8n uses, then posts the analysis result to a Telegram channel if the bot is configured.
+
+Interview talk-track (Persian): [docs/INTERVIEW_RAZ_FA.md](docs/INTERVIEW_RAZ_FA.md) · sample-work text: [docs/SAMPLE_WORK_FA.md](docs/SAMPLE_WORK_FA.md)
 
 Hot lead through the backend (secret from `.env.example`):
 
@@ -257,6 +259,7 @@ PATCH  /api/leads/{id}
 POST   /api/leads/{id}/qualify
 POST   /api/leads/{id}/followup/draft
 POST   /api/leads/{id}/approve-followup
+POST   /api/leads/{id}/reject-followup
 POST   /api/webhooks/leads     Header: X-Webhook-Secret
 POST   /api/exports/google-sheets
 ```

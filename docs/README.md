@@ -5,6 +5,8 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Layers, mermaid flow, status machine, providers |
 | [DECISIONS.md](DECISIONS.md) | Why mock LLM, webhook secret, HITL, official n8n nodes |
 | [DEMO.md](DEMO.md) | Dashboard + curl walkthrough: webhook → qualify → draft → approve |
+| [SAMPLE_WORK_FA.md](SAMPLE_WORK_FA.md) | متن نمونه‌کار برای ارسال به کارفرما |
+| [INTERVIEW_RAZ_FA.md](INTERVIEW_RAZ_FA.md) | متن ۸ دقیقه‌ای توضیح صفر تا صد |
 | [HOW_IT_WORKS_FA.md](HOW_IT_WORKS_FA.md) | Persian end-to-end guide |
 | [images/n8n-workflow.png](images/n8n-workflow.png) | Screenshot of the Lead Qualification canvas |
 
