@@ -92,3 +92,12 @@ class HealthResponse(BaseModel):
     status: str
     openai: str
     telegram: str
+    google_sheets: str
+
+
+class SheetsExportResponse(BaseModel):
+    outcome: str
+    exported: int
+    spreadsheet_id: str | None = None
+    worksheet: str
+    reason: str | None = None

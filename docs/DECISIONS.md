@@ -32,17 +32,19 @@ When `OPENAI_MODEL` supports `response_format=json_schema` with `strict: true` (
 
 ## n8n optional channels
 
-n8n can optionally call official Telegram and WhatsApp nodes, or Resend over HTTP, after explicit configuration. Empty credentials skip the adapter and return `skipped_unconfigured`. The workflow does not mark those sends as successful.
+n8n can optionally call official Telegram, WhatsApp, and Google Sheets nodes, or Resend over HTTP, after explicit configuration. Empty credentials skip the adapter and return `skipped_unconfigured`. The workflow does not mark those sends or exports as successful.
 
 Default `N8N_TELEGRAM_ALERTS=false` so n8n does not send Telegram unless you opt in. Backend Telegram on `/qualify` is unchanged.
 
 Customer WhatsApp/email run only from the `lead-approve` webhook after a CRM draft exists.
 
+Google Sheets runs on intake after a successful `/qualify`: official **Create sheet** (tab; continues if it already exists) then **Append or update row** matched on CRM `id`. `GOOGLE_SHEETS_SPREADSHEET_ID` empty skips the export. Backend `POST /api/exports/google-sheets` is a complementary full-worksheet snapshot using a service account.
+
 ## n8n LLM fallback
 
 OpenAI is the primary n8n LLM via the official **AI Agent** + **OpenAI Chat Model**. Gemini runs only if OpenAI is missing or unusable, via a second **AI Agent** + **Google Gemini Chat Model**. Env keys gate those branches; n8n credentials actually authenticate the nodes. Parse failures do not invent a qualification record.
 
-HTTP Request remains only for the FastAPI CRM and Resend. There is no official Resend node.
+HTTP Request remains only for the FastAPI CRM and Resend. There is no official Resend node. Google Sheets uses the official node (typeVersion 4.7), not HTTP.
 
 ## Human approval before send
 

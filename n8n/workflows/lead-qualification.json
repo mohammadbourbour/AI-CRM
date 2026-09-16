@@ -67,6 +67,22 @@
     },
     {
       "parameters": {
+        "content": "## 4b. Google Sheets export\nOfficial **Create sheet** then **Append or update row** by CRM `id`.\nEmpty `GOOGLE_SHEETS_SPREADSHEET_ID` skips; tab-exists errors continue.",
+        "width": 1280,
+        "height": 180,
+        "color": 4
+      },
+      "id": "00000000-0000-4000-8000-000000000008",
+      "name": "Group: Sheets",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3360,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "content": "## 5. Routing & HITL\nHot: draft only. Official Telegram node for sales alert.\nCustomer WhatsApp waits for `/webhook/lead-approve`.",
         "width": 620,
         "height": 180,
@@ -77,7 +93,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2480,
+        4700,
         0
       ]
     },
@@ -688,6 +704,270 @@
     },
     {
       "parameters": {
+        "jsCode": "const lead = $input.first().json;\nconst spreadsheetId = String($env.GOOGLE_SHEETS_SPREADSHEET_ID || '').trim();\nconst worksheet = String($env.GOOGLE_SHEETS_WORKSHEET || 'Qualified Leads').trim() || 'Qualified Leads';\nconst enabled = Boolean(spreadsheetId);\nreturn [{ json: {\n  ...lead,\n  sheets_action: enabled ? 'send' : 'skip',\n  sheets_reason: enabled ? 'configured' : 'GOOGLE_SHEETS_SPREADSHEET_ID is empty',\n  sheets_spreadsheet_id: spreadsheetId,\n  sheets_worksheet: worksheet\n} }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000063",
+      "name": "Plan Sheets Export",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-64",
+              "leftValue": "={{ $json.sheets_action }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "send"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000064",
+      "name": "Sheets Configured?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3940,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Plan Sheets Export').item.json.sheets_spreadsheet_id }}"
+        },
+        "title": "={{ $('Plan Sheets Export').item.json.sheets_worksheet }}",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000065",
+      "name": "Create sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4160,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-account",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Plan Sheets Export').item.json.sheets_spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "={{ $('Plan Sheets Export').item.json.sheets_worksheet }}"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Plan Sheets Export').item.json.id }}",
+            "external_id": "={{ $('Plan Sheets Export').item.json.external_id }}",
+            "name": "={{ $('Plan Sheets Export').item.json.name }}",
+            "email": "={{ $('Plan Sheets Export').item.json.email }}",
+            "company": "={{ $('Plan Sheets Export').item.json.company }}",
+            "source": "={{ $('Plan Sheets Export').item.json.source }}",
+            "priority": "={{ $('Plan Sheets Export').item.json.priority }}",
+            "status": "={{ $('Plan Sheets Export').item.json.status }}",
+            "industry": "={{ $('Plan Sheets Export').item.json.industry }}",
+            "intent": "={{ $('Plan Sheets Export').item.json.intent }}",
+            "product_fit": "={{ $('Plan Sheets Export').item.json.product_fit }}",
+            "recommended_next_action": "={{ $('Plan Sheets Export').item.json.recommended_next_action }}",
+            "created_at": "={{ $('Plan Sheets Export').item.json.created_at }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "external_id",
+              "displayName": "external_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "industry",
+              "displayName": "industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "intent",
+              "displayName": "intent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "product_fit",
+              "displayName": "product_fit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recommended_next_action",
+              "displayName": "recommended_next_action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000066",
+      "name": "Append or update row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4380,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-account",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Get CRM Lead').first().json;\nreturn [{ json: { ...lead } }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000067",
+      "name": "Resume CRM Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4600,
+        320
+      ]
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -715,7 +995,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        3720,
+        4820,
         320
       ]
     },
@@ -732,7 +1012,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3940,
+        5040,
         160
       ],
       "retryOnFail": true,
@@ -749,7 +1029,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4160,
+        5260,
         160
       ]
     },
@@ -782,7 +1062,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        4380,
+        5480,
         160
       ]
     },
@@ -799,7 +1079,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        4600,
+        5700,
         80
       ],
       "webhookId": "9cabb5ed-5a9f-414c-bda8-54e977e5c6b8",
@@ -816,14 +1096,14 @@
     },
     {
       "parameters": {
-        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $('Get CRM Lead').first().json;\nconst draft = safe('Draft Follow-up (HITL)');\nconst plan = safe('Plan Telegram Sales Alert');\nconst sent = safe('Send a text message');\nlet telegramStatus = 'skipped_unconfigured';\nif (plan.telegram_action === 'send') {\n  telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';\n} else {\n  telegramStatus = 'skipped_unconfigured';\n}\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: 'hot',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: draft.follow_up_status || lead.follow_up_status,\n  human_approval_required: true,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: telegramStatus,\n    whatsapp: 'awaiting_human_approval',\n    email: 'awaiting_human_approval'\n  },\n  errors: []\n} }];"
+        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $('Get CRM Lead').first().json;\nconst draft = safe('Draft Follow-up (HITL)');\nconst plan = safe('Plan Telegram Sales Alert');\nconst sent = safe('Send a text message');\nconst sheetsPlan = safe('Plan Sheets Export');\nconst upserted = safe('Append or update row in sheet');\nlet telegramStatus = 'skipped_unconfigured';\nif (plan.telegram_action === 'send') {\n  telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';\n} else {\n  telegramStatus = 'skipped_unconfigured';\n}\nlet sheetsStatus = 'skipped_unconfigured';\nif (sheetsPlan.sheets_action === 'send') {\n  sheetsStatus = upserted.error ? 'failed' : 'exported';\n}\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: 'hot',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: draft.follow_up_status || lead.follow_up_status,\n  human_approval_required: true,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: telegramStatus,\n    whatsapp: 'awaiting_human_approval',\n    email: 'awaiting_human_approval',\n    google_sheets: sheetsStatus\n  },\n  errors: []\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000043",
       "name": "Assemble Hot Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4840,
+        5940,
         160
       ]
     },
@@ -838,20 +1118,20 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        5080,
+        6180,
         160
       ]
     },
     {
       "parameters": {
-        "jsCode": "const lead = $input.first().json;\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: lead.priority || 'unknown',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: lead.follow_up_status,\n  human_approval_required: false,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: 'not_applicable',\n    whatsapp: 'skipped_not_hot',\n    email: 'skipped_not_hot'\n  },\n  errors: []\n} }];"
+        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $input.first().json;\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nconst sheetsPlan = safe('Plan Sheets Export');\nconst upserted = safe('Append or update row in sheet');\nlet sheetsStatus = 'skipped_unconfigured';\nif (sheetsPlan.sheets_action === 'send') {\n  sheetsStatus = upserted.error ? 'failed' : 'exported';\n}\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: lead.priority || 'unknown',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: lead.follow_up_status,\n  human_approval_required: false,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: 'not_applicable',\n    whatsapp: 'skipped_not_hot',\n    email: 'skipped_not_hot',\n    google_sheets: sheetsStatus\n  },\n  errors: []\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000045",
       "name": "Assemble Non-Hot Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3940,
+        5040,
         480
       ]
     },
@@ -866,7 +1146,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        4180,
+        5280,
         480
       ]
     },
@@ -1124,7 +1404,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst plan = $('Plan Optional Delivery Adapters').first().json;\nconst wa = safe('Send message');\nconst em = safe('Send Email via Resend (optional)');\nlet waStatus = plan.whatsapp_action === 'send' ? ((wa.messages || wa.ok || wa.id) ? 'sent' : 'failed') : 'skipped_unconfigured';\nlet emStatus = plan.email_action === 'send' ? ((em.id || em.ok) ? 'sent' : 'failed') : 'skipped_unconfigured';\nif (plan.whatsapp_action === 'send' && wa.error) waStatus = 'failed';\nif (plan.email_action === 'send' && em.error) emStatus = 'failed';\nreturn [{ json: {\n  outcome: 'approved',\n  lead_id: plan.lead_id,\n  crm_send_result: plan.approved.send_result || null,\n  follow_up_status: plan.approved.follow_up_status,\n  channels: {\n    backend_mock_send: plan.approved.send_result || 'unknown',\n    whatsapp: waStatus,\n    email: emStatus,\n    telegram_sales_alert: 'not_applicable'\n  },\n  notes: [\n    'Customer-facing WhatsApp/email run only after explicit human approval.',\n    'Unconfigured adapters are skipped, not marked successful.'\n  ],\n  errors: []\n} }];"
+        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst plan = $('Plan Optional Delivery Adapters').first().json;\nconst wa = safe('Send message');\nconst em = safe('Send Email via Resend (optional)');\nlet waStatus = plan.whatsapp_action === 'send' ? ((wa.messages || wa.ok || wa.id) ? 'sent' : 'failed') : 'skipped_unconfigured';\nlet emStatus = plan.email_action === 'send' ? ((em.id || em.ok) ? 'sent' : 'failed') : 'skipped_unconfigured';\nif (plan.whatsapp_action === 'send' && wa.error) waStatus = 'failed';\nif (plan.email_action === 'send' && em.error) emStatus = 'failed';\nreturn [{ json: {\n  outcome: 'approved',\n  lead_id: plan.lead_id,\n  crm_send_result: plan.approved.send_result || null,\n  follow_up_status: plan.approved.follow_up_status,\n  channels: {\n    backend_mock_send: plan.approved.send_result || 'unknown',\n    whatsapp: waStatus,\n    email: emStatus,\n    telegram_sales_alert: 'not_applicable',\n    google_sheets: 'not_applicable'\n  },\n  notes: [\n    'Customer-facing WhatsApp/email run only after explicit human approval.',\n    'Unconfigured adapters are skipped, not marked successful.'\n  ],\n  errors: []\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000061",
       "name": "Assemble Approval Result",
@@ -1437,6 +1717,68 @@
       ]
     },
     "Get CRM Lead": {
+      "main": [
+        [
+          {
+            "node": "Plan Sheets Export",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Sheets Export": {
+      "main": [
+        [
+          {
+            "node": "Sheets Configured?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets Configured?": {
+      "main": [
+        [
+          {
+            "node": "Create sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resume CRM Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create sheet": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Resume CRM Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume CRM Lead": {
       "main": [
         [
           {

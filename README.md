@@ -10,7 +10,7 @@
 <h1 align="center">AI Sales & CRM Automation</h1>
 
 <p align="center">
-  <b>Inbound lead → AI qualification → CRM → human approval → optional Telegram / WhatsApp / email</b><br>
+  <b>Inbound lead → AI qualification → CRM → Google Sheets → human approval → optional Telegram / WhatsApp / email</b><br>
   A portfolio-grade sales automation platform: n8n orchestrates, FastAPI is the source of truth, and nothing is sent to a customer until a human says yes.
 </p>
 
@@ -40,6 +40,7 @@ Unstructured inbound leads waste sales time. This system automates the slice tha
 | **Persist** | FastAPI + SQLite, insert-first idempotency on `external_id` |
 | **Score** | Backend LLM (or honest mock) + **deterministic** priority rules |
 | **Route** | Hot vs warm vs cold |
+| **Export** | Official n8n Google Sheets upsert (and optional backend snapshot) |
 | **Draft** | Follow-up copy stored as `awaiting_approval` |
 | **Approve** | Human webhook / API — then mock send, optional WhatsApp & email |
 
@@ -47,13 +48,13 @@ The model classifies and writes prose. **Code** owns validation, persistence, pr
 
 ## n8n workflow
 
-Official n8n nodes — **AI Agent**, **Telegram**, **WhatsApp** — plus HTTP only where there is no first-party node (FastAPI CRM, Resend).
+Official n8n nodes — **AI Agent**, **Telegram**, **WhatsApp**, **Google Sheets** — plus HTTP only where there is no first-party node (FastAPI CRM, Resend).
 
 <p align="center">
   <img src="docs/images/n8n-workflow.png" alt="n8n Lead Qualification workflow canvas" width="100%">
 </p>
 
-<p align="center"><sub>Color groups: intake → enrichment → AI Agent → CRM → hot routing / HITL. Bottom row is human approval + WhatsApp / email.</sub></p>
+<p align="center"><sub>Color groups: intake → enrichment → AI Agent → CRM → Google Sheets → hot routing / HITL. Bottom row is human approval + WhatsApp / email.</sub></p>
 
 | Lane | Nodes | Behavior |
 |------|--------|----------|
@@ -61,6 +62,7 @@ Official n8n nodes — **AI Agent**, **Telegram**, **WhatsApp** — plus HTTP on
 | **2. Enrichment** | Code | Email domain, guessed site, seniority — local only |
 | **3. AI qualification** | AI Agent + OpenAI Chat Model → Gemini Agent fallback | Structured JSON; skip honestly if credentials are missing |
 | **4. CRM** | HTTP → FastAPI | Create lead, `/qualify`, read-back. Backend priority wins |
+| **4b. Sheets** | Official Create sheet + Append or update row | Upsert qualified lead by `id`; skip if spreadsheet id is empty |
 | **5. Routing & HITL** | IF hot → draft → official Telegram alert | Customer copy is **not** sent here |
 | **Approve** | Second webhook | `approve-followup` → optional official WhatsApp + Resend email |
 
@@ -76,6 +78,7 @@ flowchart LR
     WH[lead-intake]
     Agent[AI Agent]
     Route{hot?}
+    Sheets[Google Sheets]
     Approve[lead-approve]
   end
 
@@ -87,6 +90,7 @@ flowchart LR
   end
 
   subgraph Channels
+    GS[Google Sheets]
     TG[Telegram]
     WA[WhatsApp]
     EM[Email]
@@ -94,16 +98,18 @@ flowchart LR
 
   Form --> WH --> Agent --> API
   API --> Rules --> DB
+  API --> Sheets --> Route
   Route -->|yes| Draft
   Draft --> Approve
   Rules -->|hot, backend| TG
+  Sheets -->|configured| GS
   Approve -->|configured| WA
   Approve -->|configured| EM
 ```
 
 | Layer | Owns | Does not own |
 |-------|------|----------------|
-| **n8n** | Visual flow, validation, AI Agent pre-qualify, channel adapters, HITL webhook | Stored priority, SQLite writes |
+| **n8n** | Visual flow, validation, AI Agent pre-qualify, Sheets upsert, channel adapters, HITL webhook | Stored priority, SQLite writes |
 | **FastAPI** | CRM, deterministic scoring, HITL flag, backend Telegram on `/qualify` | Canvas orchestration |
 | **LLM** | Intent, fit, pain points, summary, draft text | DB writes, sending messages, picking URLs |
 
@@ -125,11 +131,12 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DECISIONS.md]
 - Telegram (backend on hot `/qualify`, optional n8n sales alert)
 - WhatsApp Business Cloud (official n8n node, **after** approval)
 - Resend email (after approval)
-- Missing credentials → `skipped_unconfigured`, never `sent`
+- Google Sheets (official n8n Create sheet + upsert; optional backend snapshot)
+- Missing credentials → `skipped_unconfigured`, never `sent` / never `exported`
 
 **Ops-friendly demo**
 - Docker Compose: API on `:8000`, n8n on `:5678` (or `N8N_PORT_HOST`)
-- 26 pytest tests on in-memory SQLite
+- 31 pytest tests on in-memory SQLite
 - 110+ synthetic leads + batch runner
 - PII-masked logs (`j***@domain.com`)
 
@@ -178,7 +185,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ### n8n
 
 1. Import [`n8n/workflows/lead-qualification.json`](n8n/workflows/lead-qualification.json)
-2. Attach credentials: OpenAI, optional Gemini / Telegram / WhatsApp
+2. Attach credentials: OpenAI, optional Gemini / Telegram / WhatsApp / Google Sheets
 3. **Publish / activate** (n8n 2.x needs publish, not only a toggle)
 4. n8n must call `http://backend:8000` inside Compose, not `localhost`
 
@@ -248,6 +255,7 @@ POST   /api/leads/{id}/qualify
 POST   /api/leads/{id}/followup/draft
 POST   /api/leads/{id}/approve-followup
 POST   /api/webhooks/leads     Header: X-Webhook-Secret
+POST   /api/exports/google-sheets
 ```
 
 n8n public hooks (after activate): `POST /webhook/lead-intake`, `POST /webhook/lead-approve`.
@@ -258,7 +266,7 @@ n8n public hooks (after activate): `POST /webhook/lead-intake`, `POST /webhook/l
 |-------|--------|
 | API | Python, FastAPI, Pydantic, SQLAlchemy |
 | Store | SQLite (Compose volume `./data`) |
-| Orchestration | n8n 2.x — AI Agent, Telegram, WhatsApp, HTTP |
+| Orchestration | n8n 2.x — AI Agent, Telegram, WhatsApp, Google Sheets, HTTP |
 | LLM | OpenAI, Gemini fallback, MockLLMProvider |
 | Notify | Telegram Bot API, WhatsApp Cloud, Resend |
 | Tests | pytest, in-memory SQLite |
@@ -276,6 +284,8 @@ Copy [`.env.example`](.env.example). Empty optional keys disable that provider; 
 | `N8N_TELEGRAM_ALERTS` | Opt-in n8n sales alert (`false` by default) |
 | `WHATSAPP_*` | Official WhatsApp node after approval |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Email after approval |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` / `GOOGLE_SHEETS_WORKSHEET` | Official n8n Sheets upsert |
+| `GOOGLE_SHEETS_CREDENTIALS_FILE` / `_JSON` | Backend batch snapshot only |
 | `WEBHOOK_SECRET` | Demo shared secret for `X-Webhook-Secret` |
 
 ## Tests

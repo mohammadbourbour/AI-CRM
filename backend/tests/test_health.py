@@ -8,3 +8,4 @@ def test_health(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["openai"] == "mock"
     assert body["telegram"] == "disabled"
+    assert body["google_sheets"] == "disabled"

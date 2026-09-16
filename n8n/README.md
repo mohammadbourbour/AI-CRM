@@ -14,6 +14,7 @@ This workflow is truthful: missing API keys are skipped, not faked as successful
 - JSON parse + schema checks before CRM writes
 - Official **Telegram** node for the optional sales alert
 - Official **WhatsApp Business Cloud** node after human approval
+- Official **Google Sheets** nodes (`Create sheet` + `Append or update row`) after qualify
 - Human-approval webhook before customer-facing WhatsApp / email
 - HTTP Request only for FastAPI CRM and Resend (no first-party Resend node)
 - Backend CRM create + qualify
@@ -31,8 +32,10 @@ This workflow is truthful: missing API keys are skipped, not faked as successful
 7. `Create Lead in CRM` → `POST /api/webhooks/leads` with `X-Webhook-Secret`
 8. `Backend Qualify Lead` → `POST /api/leads/{id}/qualify` (retries, then review path on failure)
 9. `Get CRM Lead`
-10. If `priority == hot` → `Draft Follow-up (HITL)` then optional Telegram sales alert
-11. Respond with `outcome`, routing, and channel statuses (`sent` | `skipped_unconfigured` | `awaiting_human_approval` | `not_applicable`)
+10. Official Google Sheets: `Plan Sheets Export` → `Create sheet` (continue if the tab already exists) → `Append or update row in sheet` matched on CRM `id`. Skipped when `GOOGLE_SHEETS_SPREADSHEET_ID` is empty
+11. `Resume CRM Lead` so `$json.priority` is the CRM record again
+12. If `priority == hot` → `Draft Follow-up (HITL)` then optional Telegram sales alert
+13. Respond with `outcome`, routing, and channel statuses (`sent` | `exported` | `skipped_unconfigured` | `awaiting_human_approval` | `not_applicable`)
 
 Warm/cold leads are not auto-drafted. Customer WhatsApp/email are **not** sent on intake.
 
@@ -73,6 +76,7 @@ Customer follow-up text is never auto-sent.
    - **Google Gemini Chat Model** → Google Gemini (PaLM) API (fallback only)
    - **Send a text message** → Telegram account (already wired to `Telegram account` if that credential exists)
    - **Send message** → WhatsApp account
+   - **Create sheet** and **Append or update row in sheet** → Google Sheets OAuth2 account
 5. Publish / activate the workflow.
 
 Re-generate the JSON after editing `n8n/build_workflow.py`:
@@ -95,8 +99,12 @@ Passed through `docker-compose.yml`:
 | `TELEGRAM_CHAT_ID` | Chat id for the official Telegram node (bot token lives in the Telegram credential) |
 | `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_TO` | Recipient routing for the official WhatsApp node (access token lives in the WhatsApp credential) |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Optional email send after approval (HTTP — Resend has no official n8n node) |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | Spreadsheet for the official Sheets nodes. Empty → skip export |
+| `GOOGLE_SHEETS_WORKSHEET` | Tab name (default `Qualified Leads`). Create sheet makes it if missing |
 
 Empty keys → skip that provider/channel and say so in the JSON response.
+
+n8n upserts one qualified lead per intake (match on `id`). The backend `POST /api/exports/google-sheets` is a complementary full snapshot using a service account — it does not replace the official n8n nodes.
 
 ## Webhook URLs (after activate)
 

@@ -66,6 +66,13 @@ Then qualify each new id. Mock LLM maps manufacturing / predictive maintenance â
 3. POST `examples/lead_hot.json` to `http://localhost:5678/webhook/lead-intake` (or port 5679).
 4. Confirm the backend has a qualified hot lead and a follow-up draft awaiting approval.
 5. Approve via API **or** `POST /webhook/lead-approve` with `{ "lead_id": 1 }`. Customer WhatsApp/email send only if those adapters are configured.
+6. If `GOOGLE_SHEETS_SPREADSHEET_ID` is set and a Google Sheets credential is attached, the intake path upserts the qualified row. Otherwise the webhook JSON reports `google_sheets: skipped_unconfigured`.
+
+Optional backend snapshot (does not replace the n8n nodes):
+
+```powershell
+curl.exe -s -X POST http://localhost:8000/api/exports/google-sheets
+```
 
 ## Batch dataset (100+ synthetic leads)
 

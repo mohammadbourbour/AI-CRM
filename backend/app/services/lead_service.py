@@ -24,6 +24,16 @@ def list_leads(db: Session, priority: str | None = None) -> list[Lead]:
     return list(db.scalars(stmt).all())
 
 
+def list_qualified_leads(db: Session) -> list[Lead]:
+    """Leads that passed qualification (status is no longer `new`)."""
+    stmt = (
+        select(Lead)
+        .where(Lead.status != LeadStatus.NEW)
+        .order_by(Lead.created_at.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
 def create_lead(db: Session, data: LeadCreate) -> tuple[Lead, bool]:
     """Insert a lead. On unique external_id conflict, return the existing row.
 

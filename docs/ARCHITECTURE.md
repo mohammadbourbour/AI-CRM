@@ -30,7 +30,12 @@ flowchart TD
     PriorityRules --> HotCheck{priority_hot?}
     HotCheck -->|yes| Telegram[Telegram_from_qualify]
     HotCheck -->|no| SkipNotify[No_notification]
-    n8n --> PriorityIF{n8n_IF_hot}
+    n8n --> SheetsPlan{Sheets_id_set?}
+    SheetsPlan -->|yes| CreateSheet[Official_Create_sheet]
+    CreateSheet --> UpsertRow[Append_or_update_row]
+    SheetsPlan -->|no| SkipSheets[skipped_unconfigured]
+    UpsertRow --> PriorityIF{n8n_IF_hot}
+    SkipSheets --> PriorityIF
     PriorityIF -->|yes| FollowupDraft["POST /api/leads/id/followup/draft"]
     PriorityIF -->|no| SkipDraft[Skip_draft]
     FollowupDraft --> AwaitingApproval[awaiting_approval]
@@ -44,7 +49,7 @@ flowchart TD
 
 | Layer | Owns | Does not own |
 |-------|------|----------------|
-| n8n | Webhook intake, payload validation, local enrichment, official AI Agent pre-qualify, CRM HTTP orchestration, official Telegram/WhatsApp adapters, HITL approve webhook | Deterministic CRM priority, SQLite persistence |
+| n8n | Webhook intake, payload validation, local enrichment, official AI Agent pre-qualify, CRM HTTP orchestration, official Google Sheets upsert, official Telegram/WhatsApp adapters, HITL approve webhook | Deterministic CRM priority, SQLite persistence |
 | FastAPI | Validation, CRM, priority, HITL flag, backend Telegram on qualify | Visual orchestration, Gemini fallback |
 | LLM | Intent, industry, pain points, summary, draft text | Database writes, sending messages, arbitrary tools |
 | SQLite | Lead records | Business rules |
@@ -56,6 +61,8 @@ Hot-lead **CRM** Telegram is still triggered **inside** `POST /api/leads/{id}/qu
 n8n may send an **additional** sales-team Telegram alert only when `N8N_TELEGRAM_ALERTS=true` and Telegram credentials exist. Default is off so a local demo does not double-send or pretend a channel works.
 
 Customer-facing WhatsApp and email run only on `POST /webhook/lead-approve` after a draft exists. Unconfigured adapters are skipped.
+
+After a successful qualify, n8n upserts the lead into Google Sheets with the official **Create sheet** + **Append or update row** nodes when `GOOGLE_SHEETS_SPREADSHEET_ID` is set. Empty id skips with `channels.google_sheets = skipped_unconfigured`. FastAPI `POST /api/exports/google-sheets` can replace the worksheet with a full qualified-lead snapshot (service account) — CRM remains the source of truth.
 
 n8n never auto-sends follow-up copy on intake. Hot IF still calls `POST /api/leads/{id}/followup/draft` only for the CRM draft.
 

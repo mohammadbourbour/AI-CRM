@@ -12,6 +12,7 @@ from app.db import configure_engine, init_db
 from app.routes.health import router as health_router
 from app.routes.leads import router as leads_router
 from app.routes.leads import webhook_router
+from app.routes.exports import router as exports_router
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +32,17 @@ async def lifespan(_app: FastAPI):
     configure_engine(settings.database_url)
     init_db()
     logger.info(
-        "startup openai=%s telegram=%s",
+        "startup openai=%s telegram=%s google_sheets=%s",
         "enabled" if settings.openai_enabled else "mock",
         "enabled" if settings.telegram_enabled else "disabled",
+        "enabled" if settings.google_sheets_enabled else "disabled",
     )
     if not settings.openai_enabled:
         logger.warning("OPENAI_API_KEY absent; qualification uses MockLLMProvider (not production).")
     if not settings.telegram_enabled:
         logger.info("Telegram credentials absent; hot-lead notify is disabled.")
+    if not settings.google_sheets_enabled:
+        logger.info("Google Sheets credentials absent; lead export is disabled.")
     yield
 
 
@@ -53,6 +57,7 @@ app = FastAPI(
 
 app.include_router(health_router, tags=["health"])
 app.include_router(leads_router, prefix="/api/leads", tags=["leads"])
+app.include_router(exports_router, prefix="/api/exports", tags=["exports"])
 app.include_router(webhook_router, prefix="/api/webhooks", tags=["webhooks"])
 
 

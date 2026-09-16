@@ -5,6 +5,9 @@ os.environ["WEBHOOK_SECRET"] = "test-webhook-secret"
 os.environ["OPENAI_API_KEY"] = ""
 os.environ["TELEGRAM_BOT_TOKEN"] = ""
 os.environ["TELEGRAM_CHAT_ID"] = ""
+os.environ["GOOGLE_SHEETS_CREDENTIALS_FILE"] = ""
+os.environ["GOOGLE_SHEETS_CREDENTIALS_JSON"] = ""
+os.environ["GOOGLE_SHEETS_SPREADSHEET_ID"] = ""
 os.environ["LOG_LEVEL"] = "WARNING"
 
 from app.config import get_settings

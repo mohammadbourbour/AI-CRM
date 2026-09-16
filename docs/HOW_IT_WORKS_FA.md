@@ -44,7 +44,7 @@ docker compose up --build -d
 curl.exe -s http://localhost:8000/health
 ```
 
-انتظار: `"openai":"mock"` و `"telegram":"disabled"` (بدون API key طبیعی است).
+انتظار: `"openai":"mock"` و `"telegram":"disabled"` و `"google_sheets":"disabled"` (بدون credential طبیعی است).
 
 ### فعال‌سازی workflow در n8n (یک بار)
 
@@ -69,6 +69,7 @@ curl.exe -s http://localhost:8000/health
     → POST /api/webhooks/leads (با X-Webhook-Secret)
     → POST /api/leads/{id}/qualify  ← منبع حقیقت priority
     → GET /api/leads/{id}
+    → Google Sheets: Create sheet + upsert by id (اگر spreadsheet id و credential باشد)
     → اگر hot: draft follow-up + (اختیاری) Telegram sales alert
     → پاسخ JSON با outcome و وضعیت کانال‌ها
 ```
