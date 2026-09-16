@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    n8n_webhook_url: str = ""
     webhook_secret: str = "dev-webhook-secret-change-me"
     log_level: str = "INFO"
     google_sheets_credentials_file: str = ""

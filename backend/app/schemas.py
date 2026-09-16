@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -14,6 +15,7 @@ class LeadCreate(BaseModel):
     message: str = Field(min_length=1)
     external_id: str | None = Field(default=None, max_length=128)
     assigned_to: str | None = Field(default=None, max_length=255)
+    job_title: str | None = Field(default=None, max_length=128)
 
 
 class WebhookLeadPayload(LeadCreate):
@@ -101,3 +103,40 @@ class SheetsExportResponse(BaseModel):
     spreadsheet_id: str | None = None
     worksheet: str
     reason: str | None = None
+
+
+class PipelineStage(BaseModel):
+    id: str
+    label_fa: str
+    label_en: str
+    n8n_node: str
+    status: str
+    detail: str | None = None
+
+
+class DemoRunRequest(BaseModel):
+    sample: str | None = Field(default="hot", max_length=32)
+    lead: LeadCreate | None = None
+
+
+class DemoRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    sample: str
+    status: str
+    lead_id: int | None
+    telegram_status: str
+    stages: list[PipelineStage]
+    lead: LeadResponse | None = None
+    enrichment: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class DemoMetaResponse(BaseModel):
+    stages: list[PipelineStage]
+    samples: list[str]
+    n8n_webhook_configured: bool
+    telegram: str
+    openai: str
+    google_sheets: str

@@ -8,6 +8,8 @@ Portfolio implementation demonstrating an AI-assisted sales and CRM automation w
 
 Telegram credentials empty → notify is disabled. The app does not crash and does not pretend a message was delivered.
 
+After a successful `/qualify`, the backend posts the **qualification result** (all priorities) to `TELEGRAM_CHAT_ID`. That chat can be a user, group, or channel if the bot is an admin. This is a sales-team result, not a customer message. Empty credentials → `skipped_unconfigured`.
+
 ## Backend Telegram on qualify
 
 Telegram for hot leads is still invoked from `POST /api/leads/{id}/qualify` after deterministic priority is `hot` (backend unchanged). n8n intake does not send customer messages. n8n Telegram sales alerts are opt-in via `N8N_TELEGRAM_ALERTS`.

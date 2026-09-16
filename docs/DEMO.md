@@ -14,8 +14,22 @@ copy .env.example .env
 docker compose up --build
 ```
 
-Backend: [http://localhost:8000/health](http://localhost:8000/health)
+Backend: [http://localhost:8000](http://localhost:8000) (client dashboard)
+Health: [http://localhost:8000/health](http://localhost:8000/health)
 n8n: [http://localhost:5678](http://localhost:5678)
+
+## Client dashboard
+
+Open `/` and click **لید داغ / گرم / سرد**. Each click:
+
+1. Validates and enriches the lead (same steps as n8n)
+2. Writes to CRM and qualifies (backend LLM or mock + deterministic priority)
+3. Drafts a follow-up only for hot leads (still HITL)
+4. Posts the **analysis result** to the Telegram channel when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set
+
+Empty Telegram credentials skip the channel post and show `skipped_unconfigured`. That is not a successful send.
+
+Add the bot as a **channel administrator**, then set `TELEGRAM_CHAT_ID` to `-100…` or `@channelusername`.
 
 ## Direct API (no n8n)
 
@@ -25,7 +39,7 @@ Use the demo webhook secret from `.env.example`.
 curl.exe -s -X POST http://localhost:8000/api/webhooks/leads -H "Content-Type: application/json" -H "X-Webhook-Secret: dev-webhook-secret-change-me" --data-binary "@examples/lead_hot.json"
 ```
 
-Qualify (computes priority; hot leads attempt Telegram from this endpoint only):
+Qualify (computes priority; every successful qualify attempts a Telegram **result** post to the configured chat/channel):
 
 ```powershell
 curl.exe -s -X POST http://localhost:8000/api/leads/1/qualify

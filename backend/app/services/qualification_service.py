@@ -9,7 +9,7 @@ from app.models import IntentLevel, Lead, LeadStatus, Priority, ProductFit, utc_
 from app.pii import mask_email
 from app.providers.llm import LLMProvider, get_llm_provider
 from app.schemas import AIQualificationResult
-from app.services.notification_service import notify_hot_lead
+from app.services.notification_service import notify_qualification_result
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,13 @@ def _persist_qualification_error(db: Session, lead: Lead, message: str) -> None:
     db.refresh(lead)
 
 
-def qualify_lead(db: Session, lead: Lead, llm: LLMProvider | None = None) -> Lead:
+def qualify_lead(
+    db: Session,
+    lead: Lead,
+    llm: LLMProvider | None = None,
+    *,
+    notify: bool = True,
+) -> Lead:
     logger.info(
         "qualification_start lead_id=%s email=%s",
         lead.id,
@@ -81,7 +87,7 @@ def qualify_lead(db: Session, lead: Lead, llm: LLMProvider | None = None) -> Lea
         lead.status.value,
     )
 
-    if lead.priority == Priority.HOT:
-        notify_hot_lead(lead)
+    if notify:
+        notify_qualification_result(lead)
 
     return lead

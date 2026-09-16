@@ -136,7 +136,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DECISIONS.md]
 
 **Ops-friendly demo**
 - Docker Compose: API on `:8000`, n8n on `:5678` (or `N8N_PORT_HOST`)
-- 31 pytest tests on in-memory SQLite
+- 38 pytest tests on in-memory SQLite
 - 110+ synthetic leads + batch runner
 - PII-masked logs (`j***@domain.com`)
 
@@ -166,7 +166,8 @@ docker compose up --build
 
 | Service | URL |
 |---------|-----|
-| API | http://localhost:8000 |
+| **Dashboard** | http://localhost:8000 |
+| API | http://localhost:8000/docs |
 | Health | http://localhost:8000/health |
 | n8n | http://localhost:5678 |
 
@@ -192,6 +193,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Full notes: [n8n/README.md](n8n/README.md)
 
 ## Demo
+
+Open the client dashboard at [http://localhost:8000](http://localhost:8000) and run Hot / Warm / Cold. The board plays the same CRM path n8n uses, then posts the analysis result to a Telegram channel if the bot is configured.
 
 Hot lead through the backend (secret from `.env.example`):
 

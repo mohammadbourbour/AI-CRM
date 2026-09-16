@@ -118,3 +118,19 @@ class Lead(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
+
+
+class PipelineRun(Base):
+    """One client-demo pass through the same CRM APIs n8n calls."""
+
+    __tablename__ = "pipeline_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    sample: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
+    lead_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    telegram_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    stages: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>داشبورد تحلیل لید — AI Sales CRM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Vazirmatn:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <p class="eyebrow">Client demo · n8n → FastAPI CRM</p>
+        <h1>اتاق فرمان لید</h1>
+        <p class="lede">
+          از لحظه ورود به وب‌هوک n8n تا نتیجه تحلیل، مسیریابی، پیش‌نویس HITL و ارسال به کانال تلگرام.
+        </p>
+      </div>
+      <ul class="health" id="health"></ul>
+    </header>
+
+    <section class="controls">
+      <div class="control-copy">
+        <h2>نمایش برای کارفرما</h2>
+        <p>
+          هر دکمه یک لید واقعی می‌سازد، همان APIهایی که n8n صدا می‌زند را اجرا می‌کند، و مرحله‌به‌مرحله روی بوم حرکت می‌کند.
+          پیام مشتری ارسال نمی‌شود؛ نتیجه تحلیل به کانال تلگرام می‌رود اگر ربات تنظیم شده باشد.
+        </p>
+      </div>
+      <div class="buttons">
+        <button type="button" data-sample="hot">لید داغ · Hot</button>
+        <button type="button" data-sample="warm">لید گرم · Warm</button>
+        <button type="button" data-sample="cold">لید سرد · Cold</button>
+      </div>
+    </section>
+
+    <ol class="pipeline" id="pipeline"></ol>
+
+    <section class="grid">
+      <article class="panel timeline-panel">
+        <h2>تایم‌لاین اجرا</h2>
+        <ol id="timeline" class="timeline"></ol>
+      </article>
+      <article class="panel result-panel">
+        <h2>نتیجه</h2>
+        <div id="result" class="result empty">هنوز اجرایی نشده. یکی از لیدهای نمونه را بزنید.</div>
+      </article>
+    </section>
+
+    <section class="panel board-panel">
+      <h2>تخته CRM</h2>
+      <div class="board" id="board"></div>
+    </section>
+
+    <footer>
+      n8n ارکستراسیون است · FastAPI منبع حقیقت اولویت · تلگرام فقط نتیجه تیم فروش است، نه پیام مشتری
+    </footer>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>
