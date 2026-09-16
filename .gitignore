@@ -26,9 +26,6 @@ n8n-check*
 Thumbs.db
 examples/dataset/last_run_summary.json
 
-# Personal resume materials — never commit
-resume/
-
 # Google service-account keys (never commit)
 *service-account*.json
 google-credentials.json
