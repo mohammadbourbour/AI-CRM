@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     n8n_webhook_url: str = ""
+    n8n_public_url: str = "http://localhost:5678"
     webhook_secret: str = "dev-webhook-secret-change-me"
     log_level: str = "INFO"
     google_sheets_credentials_file: str = ""
@@ -38,6 +39,15 @@ class Settings(BaseSettings):
             or self.google_sheets_credentials_json.strip()
         )
         return has_creds and bool(self.google_sheets_spreadsheet_id.strip())
+
+    @property
+    def n8n_sheets_configured(self) -> bool:
+        return bool(self.google_sheets_spreadsheet_id.strip())
+
+    @property
+    def n8n_executions_url(self) -> str:
+        base = self.n8n_public_url.strip().rstrip("/") or "http://localhost:5678"
+        return f"{base}/home/executions"
 
 
 @lru_cache

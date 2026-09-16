@@ -3,7 +3,14 @@
 برای آگهی «متخصص اتوماسیون فرایندها و هوش مصنوعی» در بازرگانی رز.  
 مخزن: https://github.com/mohammadbourbour/AI-CRM
 
-قبل از جلسه: `docker compose up --build`، مرورگر روی http://localhost:8000. با داشبورد باز بگویید، دکمه بزنید، بعد جمله بعدی.
+قبل از جلسه این را انجام دهید: [docs/MORNING_RUN_FA.md](docs/MORNING_RUN_FA.md)
+
+1. `docker compose up --build`
+2. n8n → Import در صورت نیاز → **Publish**
+3. Executions را باز بگذارید
+4. http://localhost:8000 → مسیر **ارسال به n8n** → یک سناریو
+
+با داشبورد و n8n کنار هم بگویید، دکمه بزنید، execution را نشان دهید، بعد جمله بعدی.
 
 ## ۰:۳۰ — مسئله به زبان غیر فنی
 

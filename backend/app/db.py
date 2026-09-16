@@ -39,9 +39,28 @@ def get_engine() -> Engine:
     return _engine
 
 
+def _ensure_sqlite_columns(engine: Engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    additions = {
+        "via": "VARCHAR(16) DEFAULT 'crm'",
+        "n8n_outcome": "VARCHAR(64)",
+        "sheets_status": "VARCHAR(64)",
+    }
+    with engine.begin() as conn:
+        rows = conn.exec_driver_sql("PRAGMA table_info(pipeline_runs)").fetchall()
+        if not rows:
+            return
+        existing = {row[1] for row in rows}
+        for name, ddl in additions.items():
+            if name not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE pipeline_runs ADD COLUMN {name} {ddl}")
+
+
 def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    _ensure_sqlite_columns(engine)
 
 
 def get_db() -> Generator[Session, None, None]:

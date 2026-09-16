@@ -192,11 +192,18 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Full notes: [n8n/README.md](n8n/README.md)
 
-## Demo
+## Demo (morning interview path)
 
-Open the client dashboard at [http://localhost:8000](http://localhost:8000) and run **invalid / Cold / Warm / Hot**, then accept or reject the hot draft. The board plays the same CRM path n8n uses, then posts the analysis result to a Telegram channel if the bot is configured.
+Exact Persian checklist: [docs/MORNING_RUN_FA.md](docs/MORNING_RUN_FA.md)
 
-Interview talk-track (Persian): [docs/INTERVIEW_RAZ_FA.md](docs/INTERVIEW_RAZ_FA.md) · sample-work text: [docs/SAMPLE_WORK_FA.md](docs/SAMPLE_WORK_FA.md)
+1. `docker compose up --build`
+2. Open n8n, import `n8n/workflows/lead-qualification.json` if needed, click **Publish**
+3. Keep **Executions** open
+4. Open [http://localhost:8000](http://localhost:8000), leave **ارسال به n8n** selected, run invalid / Cold / Warm / Hot
+
+The dashboard POSTs the sample to n8n; n8n calls CRM. Telegram and Google Sheets only send when configured — otherwise `skipped_unconfigured`.
+
+Interview talk-track: [docs/INTERVIEW_RAZ_FA.md](docs/INTERVIEW_RAZ_FA.md) · sample-work: [docs/SAMPLE_WORK_FA.md](docs/SAMPLE_WORK_FA.md)
 
 Hot lead through the backend (secret from `.env.example`):
 

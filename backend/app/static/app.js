@@ -22,11 +22,14 @@ async function fetchJson(url, options) {
   return body;
 }
 
-function renderHealth(health) {
+function renderHealth(health, meta) {
+  const n8nOn = Boolean(meta && meta.n8n_webhook_configured);
+  const sheetsOn = Boolean(meta && meta.n8n_sheets_configured) || health.google_sheets === "enabled";
   const chips = [
+    ["n8n", n8nOn ? "on" : "off", n8nOn ? "webhook" : "no URL"],
     ["OpenAI", health.openai === "enabled" ? "on" : "off", health.openai],
     ["Telegram", health.telegram === "enabled" ? "on" : "off", health.telegram],
-    ["Sheets", health.google_sheets === "enabled" ? "on" : "off", health.google_sheets],
+    ["Sheets", sheetsOn ? "on" : "off", sheetsOn ? "id set" : "off"],
   ];
   healthEl.innerHTML = chips
     .map(([label, klass, value]) => `<li class="${klass}">${label}: ${value}</li>`)
@@ -62,6 +65,28 @@ function hitlButtons(lead) {
     </div>`;
 }
 
+function selectedVia() {
+  const picked = document.querySelector("input[name=via]:checked");
+  return picked ? picked.value : "n8n";
+}
+
+function renderChannels(run) {
+  const sheets = run.sheets_status || "—";
+  const exec = run.n8n_executions_url
+    ? `<p class="telegram"><a href="${run.n8n_executions_url}" target="_blank" rel="noreferrer">باز کردن Executions در n8n</a> · via=<b>${run.via || "crm"}</b> · Sheets: <b>${sheets}</b></p>`
+    : `<p class="telegram">via=<b>${run.via || "crm"}</b> · Sheets: <b>${sheets}</b></p>`;
+  const preview = run.telegram_preview
+    ? `<pre class="draft telegram-preview">${run.telegram_preview.replace(/<[^>]+>/g, "")}</pre>`
+    : "";
+  const row = run.sheets_row
+    ? `<pre class="draft">${JSON.stringify(run.sheets_row, null, 2)}</pre>`
+    : "";
+  return `${exec}
+    <div class="telegram">پیام کانال تلگرام (نتیجه تیم، نه پیام مشتری): <b>${run.telegram_status}</b></div>
+    ${preview}
+    ${row ? `<div class="telegram">ردیف Google Sheets</div>${row}` : ""}`;
+}
+
 function renderResult(run) {
   const lead = run.lead;
   currentLeadId = lead ? lead.id : null;
@@ -71,7 +96,8 @@ function renderResult(run) {
     resultEl.innerHTML = `<span class="badge rejected">REJECTED</span>
       <h3>ورود رد شد — به CRM نرسید</h3>
       <p>${failed ? failed.detail : "payload نامعتبر"}</p>
-      <p class="telegram">این همان گیت داده خراب است: کار تکراری ورود دستی و داده ناقص حذف می‌شود.</p>`;
+      <p class="telegram">این همان گیت داده خراب است: کار تکراری ورود دستی و داده ناقص حذف می‌شود.</p>
+      ${renderChannels(run)}`;
     return;
   }
   const priority = lead.priority || "n/a";
@@ -89,7 +115,7 @@ function renderResult(run) {
     </dl>
     ${lead.draft_message ? `<div class="draft">${lead.draft_message}</div>` : ""}
     ${hitlButtons(lead)}
-    <div class="telegram">تلگرام کانال: <b>${run.telegram_status}</b></div>
+    ${renderChannels(run)}
   `;
   resultEl.querySelectorAll("[data-decision]").forEach((button) => {
     button.addEventListener("click", () => decideFollowup(button.dataset.decision));
@@ -155,6 +181,7 @@ async function decideFollowup(decision) {
 }
 
 async function runSample(sample) {
+  const via = selectedVia();
   const buttons = document.querySelectorAll("button[data-sample]");
   buttons.forEach((btn) => {
     btn.disabled = true;
@@ -162,12 +189,13 @@ async function runSample(sample) {
   timelineEl.innerHTML = "";
   renderPipeline(metaStages.map((stage) => ({ ...stage, status: "pending" })));
   resultEl.className = "result empty";
-  resultEl.textContent = "در حال اجرای مسیر واقعی CRM…";
+  resultEl.textContent =
+    via === "n8n" ? "در حال ارسال به n8n… Executions را نگاه کنید." : "در حال اجرای مسیر مستقیم CRM…";
   try {
     const run = await fetchJson("/api/demo/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sample }),
+      body: JSON.stringify({ sample, via }),
     });
     const stagesState = metaStages.map((stage) => ({ ...stage, status: "pending" }));
     renderPipeline(stagesState);
@@ -195,7 +223,7 @@ async function runSample(sample) {
 
 async function boot() {
   const [health, meta] = await Promise.all([fetchJson("/health"), fetchJson("/api/demo/meta")]);
-  renderHealth(health);
+  renderHealth(health, meta);
   metaStages = meta.stages;
   renderPipeline(metaStages);
   await loadBoard();

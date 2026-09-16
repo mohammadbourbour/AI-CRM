@@ -124,6 +124,7 @@ class PipelineStage(BaseModel):
 class DemoRunRequest(BaseModel):
     sample: str | None = Field(default="hot", max_length=32)
     lead: LeadCreate | None = None
+    via: str | None = Field(default="crm", max_length=16)
 
 
 class DemoRunResponse(BaseModel):
@@ -132,8 +133,14 @@ class DemoRunResponse(BaseModel):
     id: str
     sample: str
     status: str
+    via: str = "crm"
     lead_id: int | None
     telegram_status: str
+    n8n_outcome: str | None = None
+    sheets_status: str | None = None
+    telegram_preview: str | None = None
+    sheets_row: dict[str, Any] | None = None
+    n8n_executions_url: str | None = None
     stages: list[PipelineStage]
     lead: LeadResponse | None = None
     enrichment: dict[str, Any] | None = None
@@ -144,6 +151,9 @@ class DemoMetaResponse(BaseModel):
     stages: list[PipelineStage]
     samples: list[str]
     n8n_webhook_configured: bool
+    n8n_public_url: str
+    n8n_executions_url: str
+    n8n_sheets_configured: bool
     telegram: str
     openai: str
     google_sheets: str

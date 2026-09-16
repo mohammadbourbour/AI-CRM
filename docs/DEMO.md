@@ -20,7 +20,9 @@ n8n: [http://localhost:5678](http://localhost:5678)
 
 ## Client dashboard
 
-Open `/` and click the scenario buttons. Each click is a real CRM path:
+Open `/`. Leave **ارسال به n8n** selected after the workflow is **Published**. Each click POSTs that sample to ` /webhook/lead-intake `. Watch the run under n8n **Executions**.
+
+The **مستقیم CRM** radio is only a fallback if n8n is down.
 
 | Button | Outcome |
 |--------|---------|

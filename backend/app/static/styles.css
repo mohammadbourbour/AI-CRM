@@ -103,6 +103,35 @@ footer {
   flex-wrap: wrap;
 }
 
+.via {
+  border: 0;
+  margin: 12px 0 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.via legend {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.via label {
+  display: block;
+  margin: 4px 0;
+}
+
+.telegram-preview {
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+
+a {
+  color: var(--teal);
+}
+
 button {
   font-family: inherit;
   cursor: pointer;

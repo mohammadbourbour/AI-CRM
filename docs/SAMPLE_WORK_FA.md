@@ -26,7 +26,7 @@ copy .env.example .env
 docker compose up --build
 ```
 
-باز کنید: http://localhost:8000
+باز کنید: http://localhost:8000 — مسیر **ارسال به n8n** را انتخاب کنید. n8n باید Publish شده باشد. جزئیات صبح: [MORNING_RUN_FA.md](MORNING_RUN_FA.md)
 
 سناریوها را یکی‌یکی بزنید و توضیح دهید:
 

@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.exceptions import QualificationFailedError
-from app.models import PipelineRun, Priority
+from app.models import Lead, PipelineRun, Priority
+from app.providers.n8n import post_lead_intake
 from app.schemas import LeadCreate, LeadResponse, PipelineStage
 from app.services import followup_service, lead_service, qualification_service
 from app.services.normalization_service import NormalizationError, normalize_lead_payload
-from app.services.notification_service import notify_qualification_result
+from app.services.notification_service import format_qualification_result_html, notify_qualification_result
 
 STAGE_DEFS: list[dict[str, str]] = [
     {
@@ -162,6 +163,125 @@ def enrich_contact(email: str, job_title: str | None) -> dict[str, Any]:
     }
 
 
+def sample_payload_dict(sample: str) -> dict[str, Any]:
+    """JSON body posted to n8n. Invalid sample is intentionally malformed."""
+    if sample not in SAMPLES:
+        raise ValueError(f"Unknown sample {sample!r}. Use hot, warm, cold, or invalid.")
+    stamp = uuid.uuid4().hex[:8]
+    if sample == "invalid":
+        return {
+            "name": " ",
+            "email": "not-an-email",
+            "company": "",
+            "message": "",
+            "source": "website",
+            "external_id": f"demo-invalid-{stamp}",
+        }
+    raw = SAMPLES[sample]
+    body: dict[str, Any] = {
+        "name": raw["name"],
+        "email": raw["email"],
+        "company": raw["company"],
+        "source": raw.get("source", "unknown"),
+        "message": raw["message"],
+        "external_id": f"demo-{sample}-{stamp}",
+    }
+    if raw.get("company_size"):
+        body["company_size"] = raw["company_size"]
+    if raw.get("job_title"):
+        body["job_title"] = raw["job_title"]
+    return body
+
+
+def sheet_row_from_lead(lead: Lead) -> dict[str, Any]:
+    def _val(value: Any) -> Any:
+        return value.value if hasattr(value, "value") else value
+
+    return {
+        "id": lead.id,
+        "external_id": lead.external_id,
+        "name": lead.name,
+        "email": lead.email,
+        "company": lead.company,
+        "source": lead.source,
+        "priority": _val(lead.priority),
+        "status": _val(lead.status),
+        "industry": lead.industry,
+        "intent": _val(lead.intent),
+        "product_fit": _val(lead.product_fit),
+        "recommended_next_action": lead.recommended_next_action,
+        "created_at": lead.created_at.isoformat() if lead.created_at else None,
+    }
+
+
+def _apply_telegram_stage(stages: list[dict[str, Any]], telegram_status: str) -> None:
+    if telegram_status == "sent":
+        _set_stage(stages, "telegram", "done", "Analysis result posted to the Telegram channel.")
+    elif telegram_status == "failed":
+        _set_stage(stages, "telegram", "failed", "Telegram call failed. Qualification is still in CRM.")
+    elif telegram_status == "not_applicable":
+        _set_stage(stages, "telegram", "skipped", "No CRM lead — nothing to post.")
+    else:
+        _set_stage(
+            stages,
+            "telegram",
+            "skipped",
+            "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID empty — skipped, not faked as sent.",
+        )
+
+
+def stages_from_n8n_result(outcome: dict[str, Any]) -> list[dict[str, Any]]:
+    stages = blank_stages()
+    kind = str(outcome.get("outcome") or "")
+    errors = outcome.get("errors") or []
+    err = ", ".join(str(item) for item in errors) if errors else None
+    channels = outcome.get("channels") or {}
+    _set_stage(stages, "intake", "done", "n8n Lead Intake Webhook received the payload from the dashboard.")
+    if kind == "validation_failed":
+        _set_stage(stages, "validate", "failed", err or "invalid payload")
+        for stage_id in ("enrich", "crm", "qualify", "sheets", "route", "draft", "telegram"):
+            _set_stage(stages, stage_id, "skipped", "Stopped in n8n before CRM write.")
+        return stages
+    if kind in {"failed", "qualification_failed"}:
+        _set_stage(stages, "validate", "done", "Payload passed n8n validation.")
+        _set_stage(stages, "enrich", "done", "Local enrichment in n8n.")
+        crm_status = "done" if outcome.get("lead_id") else "failed"
+        _set_stage(stages, "crm", crm_status, err or kind)
+        _set_stage(stages, "qualify", "failed" if kind == "qualification_failed" else "skipped", err or kind)
+        for stage_id in ("sheets", "route", "draft", "telegram"):
+            _set_stage(stages, stage_id, "skipped", "n8n stopped on review path.")
+        return stages
+
+    _set_stage(stages, "validate", "done", "n8n Validate Incoming Lead passed.")
+    _set_stage(stages, "enrich", "done", "n8n Optional Lead Enrichment (local only).")
+    _set_stage(stages, "crm", "done", f"CRM id={outcome.get('lead_id')}.")
+    _set_stage(stages, "qualify", "done", "n8n called backend /qualify (deterministic priority).")
+    sheets = str(channels.get("google_sheets") or "skipped_unconfigured")
+    if sheets == "exported":
+        _set_stage(stages, "sheets", "done", "n8n Google Sheets upserted this lead.")
+    elif sheets == "failed":
+        _set_stage(stages, "sheets", "failed", "n8n Sheets node failed. Check the Google credential.")
+    else:
+        _set_stage(
+            stages,
+            "sheets",
+            "skipped",
+            "GOOGLE_SHEETS_SPREADSHEET_ID empty or Sheets credential missing — not marked exported.",
+        )
+    routed = outcome.get("routed") or outcome.get("priority") or "unknown"
+    _set_stage(stages, "route", "done", f"n8n routed {routed}.")
+    if str(routed) == "hot":
+        _set_stage(
+            stages,
+            "draft",
+            "done",
+            f"Follow-up {outcome.get('follow_up_status') or 'awaiting_approval'} — customer send still blocked.",
+        )
+    else:
+        _set_stage(stages, "draft", "skipped", "Warm/cold leads are not auto-drafted.")
+    return stages
+
+
 def _payload_from_sample(sample: str) -> LeadCreate:
     raw = SAMPLES[sample]
     stamp = uuid.uuid4().hex[:8]
@@ -199,6 +319,7 @@ def run_demo(db: Session, sample: str = "hot", lead_in: LeadCreate | None = None
         id=str(uuid.uuid4()),
         sample=chosen,
         status="running",
+        via="crm",
         stages=blank_stages(),
         telegram_status="pending",
     )
@@ -310,11 +431,81 @@ def run_demo(db: Session, sample: str = "hot", lead_in: LeadCreate | None = None
             "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID empty — skipped, not faked as sent.",
         )
 
+    sheets_stage = next((item for item in stages if item["id"] == "sheets"), None)
+    run.sheets_status = (sheets_stage or {}).get("status")
+    run.n8n_outcome = None
     run.stages = stages
     run.status = "completed"
     db.commit()
     db.refresh(run)
     db.refresh(qualified)
+    return run, enrichment
+
+
+def run_demo_via_n8n(
+    db: Session, sample: str = "hot", lead_in: LeadCreate | None = None
+) -> tuple[PipelineRun, dict[str, Any] | None]:
+    """Send the sample to n8n; n8n calls CRM. Dashboard only records what n8n returns."""
+    settings = get_settings()
+    chosen = "custom" if lead_in is not None else sample
+    if lead_in is None:
+        payload = sample_payload_dict(sample)
+        enrichment = enrich_contact(str(payload.get("email") or ""), payload.get("job_title"))
+    else:
+        payload = lead_in.model_dump(exclude_none=True)
+        enrichment = enrich_contact(str(payload.get("email") or ""), payload.get("job_title"))
+
+    run = PipelineRun(
+        id=str(uuid.uuid4()),
+        sample=chosen,
+        status="running",
+        via="n8n",
+        stages=blank_stages(),
+        telegram_status="pending",
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
+    outcome = post_lead_intake(payload)
+    kind = str(outcome.get("outcome") or "unknown")
+    stages = stages_from_n8n_result(outcome)
+    lead_id = outcome.get("lead_id")
+    run.lead_id = int(lead_id) if lead_id is not None else None
+    run.n8n_outcome = kind
+    channels = outcome.get("channels") or {}
+    run.sheets_status = str(channels.get("google_sheets") or "skipped_unconfigured")
+
+    if kind == "validation_failed":
+        run.status = "failed"
+        run.telegram_status = "not_applicable"
+        _apply_telegram_stage(stages, run.telegram_status)
+        run.stages = stages
+        db.commit()
+        db.refresh(run)
+        return run, None
+    if kind in {"failed", "qualification_failed"}:
+        run.status = "failed"
+        run.telegram_status = "not_applicable"
+        _apply_telegram_stage(stages, run.telegram_status)
+        run.stages = stages
+        db.commit()
+        db.refresh(run)
+        return run, enrichment
+
+    run.status = "completed"
+    if settings.telegram_enabled:
+        # Backend /qualify already posted; do not send a second copy.
+        run.telegram_status = "sent"
+    else:
+        run.telegram_status = "skipped_unconfigured"
+    n8n_alert = str(channels.get("telegram_sales_alert") or "")
+    if n8n_alert == "sent":
+        run.telegram_status = "sent"
+    _apply_telegram_stage(stages, run.telegram_status)
+    run.stages = stages
+    db.commit()
+    db.refresh(run)
     return run, enrichment
 
 
@@ -325,12 +516,21 @@ def latest_run(db: Session) -> PipelineRun | None:
 
 def serialize_run(db: Session, run: PipelineRun, enrichment: dict[str, Any] | None = None) -> dict[str, Any]:
     lead = lead_service.get_lead(db, run.lead_id) if run.lead_id else None
+    settings = get_settings()
+    telegram_preview = format_qualification_result_html(lead) if lead else None
+    sheets_row = sheet_row_from_lead(lead) if lead else None
     return {
         "id": run.id,
         "sample": run.sample,
         "status": run.status,
+        "via": getattr(run, "via", None) or "crm",
         "lead_id": run.lead_id,
         "telegram_status": run.telegram_status,
+        "n8n_outcome": getattr(run, "n8n_outcome", None),
+        "sheets_status": getattr(run, "sheets_status", None),
+        "telegram_preview": telegram_preview,
+        "sheets_row": sheets_row,
+        "n8n_executions_url": settings.n8n_executions_url,
         "stages": [PipelineStage.model_validate(item).model_dump() for item in run.stages],
         "lead": LeadResponse.model_validate(lead).model_dump(mode="json") if lead else None,
         "enrichment": enrichment,
