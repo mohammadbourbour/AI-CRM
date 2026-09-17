@@ -77,7 +77,15 @@ Customer follow-up text is never auto-sent.
    - **Send a text message** → Telegram account (already wired to `Telegram account` if that credential exists)
    - **Send message** → WhatsApp account
    - **Create sheet** and **Append or update row in sheet** → Google Sheets OAuth2 account
-5. Publish / activate the workflow.
+5. **Publish / activate** the workflow. Until you Publish, the dashboard `via=n8n` path returns 503 (`webhook is not registered`).
+
+Morning interview steps (Persian): [../docs/MORNING_RUN_FA.md](../docs/MORNING_RUN_FA.md)
+
+Optional helper (imports the JSON, does **not** Publish):
+
+```powershell
+python scripts/bootstrap_n8n.py
+```
 
 Re-generate the JSON after editing `n8n/build_workflow.py`:
 

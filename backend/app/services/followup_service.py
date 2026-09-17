@@ -65,3 +65,19 @@ def approve_and_send(db: Session, lead: Lead) -> tuple[Lead, str]:
         lead.follow_up_status.value,
     )
     return lead, send_result
+
+
+def reject_draft(db: Session, lead: Lead) -> Lead:
+    """Human rejection: keep the draft for audit, do not send, mark skipped."""
+    if lead.follow_up_status == FollowUpStatus.SENT:
+        raise FollowUpConflictError("Follow-up already sent")
+    if lead.follow_up_status not in APPROVABLE or not lead.draft_message:
+        raise FollowUpConflictError(
+            "Follow-up cannot be rejected until a draft exists and is awaiting approval"
+        )
+    logger.info("followup_rejected lead_id=%s", lead.id)
+    lead.follow_up_status = FollowUpStatus.SKIPPED
+    lead.updated_at = utc_now()
+    db.commit()
+    db.refresh(lead)
+    return lead

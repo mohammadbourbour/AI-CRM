@@ -12,6 +12,7 @@ dist/
 build/
 data/*.db
 data/*.db-journal
+backend/data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm

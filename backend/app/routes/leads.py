@@ -18,6 +18,7 @@ from app.pii import mask_email
 from app.schemas import (
     FollowUpApproveResponse,
     FollowUpDraftResponse,
+    FollowUpRejectResponse,
     LeadCreate,
     LeadResponse,
     LeadUpdate,
@@ -146,6 +147,20 @@ def approve_followup(lead_id: int, db: Session = Depends(get_db)) -> FollowUpApp
         follow_up_status=updated.follow_up_status,
         approved_at=updated.approved_at,
         send_result=send_result,
+        status=updated.status,
+    )
+
+
+@router.post("/{lead_id}/reject-followup", response_model=FollowUpRejectResponse)
+def reject_followup(lead_id: int, db: Session = Depends(get_db)) -> FollowUpRejectResponse:
+    lead = _get_or_404(db, lead_id)
+    try:
+        updated = followup_service.reject_draft(db, lead)
+    except FollowUpConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.message) from exc
+    return FollowUpRejectResponse(
+        lead_id=updated.id,
+        follow_up_status=updated.follow_up_status,
         status=updated.status,
     )
 

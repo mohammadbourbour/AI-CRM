@@ -21,7 +21,7 @@
 
 | سرویس | آدرس |
 |--------|------|
-| Backend API | http://localhost:8000 |
+| Backend API / داشبورد | http://localhost:8000 |
 | Swagger | http://localhost:8000/docs |
 | Health | http://localhost:8000/health |
 | n8n UI | http://localhost:5679 (اگر 5678 اشغال بود) |
@@ -120,7 +120,7 @@ curl.exe -s -X POST http://localhost:8000/api/leads/1/qualify
 # 3) draft
 curl.exe -s -X POST http://localhost:8000/api/leads/1/followup/draft
 
-# 4) approve
+# 4) approve  (یا reject: /api/leads/1/reject-followup)
 curl.exe -s -X POST http://localhost:8000/api/leads/1/approve-followup
 ```
 

@@ -136,7 +136,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DECISIONS.md]
 
 **Ops-friendly demo**
 - Docker Compose: API on `:8000`, n8n on `:5678` (or `N8N_PORT_HOST`)
-- 31 pytest tests on in-memory SQLite
+- 38 pytest tests on in-memory SQLite
 - 110+ synthetic leads + batch runner
 - PII-masked logs (`j***@domain.com`)
 
@@ -166,7 +166,8 @@ docker compose up --build
 
 | Service | URL |
 |---------|-----|
-| API | http://localhost:8000 |
+| **Dashboard** | http://localhost:8000 |
+| API | http://localhost:8000/docs |
 | Health | http://localhost:8000/health |
 | n8n | http://localhost:5678 |
 
@@ -191,7 +192,18 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Full notes: [n8n/README.md](n8n/README.md)
 
-## Demo
+## Demo (morning interview path)
+
+Exact Persian checklist: [docs/MORNING_RUN_FA.md](docs/MORNING_RUN_FA.md)
+
+1. `docker compose up --build`
+2. Open n8n, import `n8n/workflows/lead-qualification.json` if needed, click **Publish**
+3. Keep **Executions** open
+4. Open [http://localhost:8000](http://localhost:8000), leave **ارسال به n8n** selected, run invalid / Cold / Warm / Hot
+
+The dashboard POSTs the sample to n8n; n8n calls CRM. Telegram and Google Sheets only send when configured — otherwise `skipped_unconfigured`.
+
+Interview talk-track: [docs/INTERVIEW_RAZ_FA.md](docs/INTERVIEW_RAZ_FA.md) · sample-work: [docs/SAMPLE_WORK_FA.md](docs/SAMPLE_WORK_FA.md)
 
 Hot lead through the backend (secret from `.env.example`):
 
@@ -254,6 +266,7 @@ PATCH  /api/leads/{id}
 POST   /api/leads/{id}/qualify
 POST   /api/leads/{id}/followup/draft
 POST   /api/leads/{id}/approve-followup
+POST   /api/leads/{id}/reject-followup
 POST   /api/webhooks/leads     Header: X-Webhook-Secret
 POST   /api/exports/google-sheets
 ```
