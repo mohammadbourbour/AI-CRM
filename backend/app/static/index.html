@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>داشبورد تحلیل لید — AI Sales CRM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Vazirmatn:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <p class="eyebrow">نمونه‌کار زنده · n8n → FastAPI CRM → Telegram</p>
+        <h1>اتاق فرمان لید</h1>
+        <p class="lede">
+          از ورود وب‌هوک تا قبول یا رد انسانی. داده ناقص وارد CRM نمی‌شود؛ اولویت را کد محاسبه می‌کند؛ پیام مشتری بدون تأیید ارسال نمی‌شود.
+        </p>
+      </div>
+      <ul class="health" id="health"></ul>
+    </header>
+
+    <section class="controls">
+      <div class="control-copy">
+        <h2>سناریوها</h2>
+        <p>
+          مسیر پیش‌فرض <b>ارسال به n8n</b> است. گردش را Publish کنید و Executions را باز بگذارید.
+        </p>
+        <fieldset class="via">
+          <legend>مسیر اجرا</legend>
+          <label><input type="radio" name="via" value="n8n" checked /> ارسال به n8n</label>
+          <label><input type="radio" name="via" value="crm" /> مستقیم CRM</label>
+        </fieldset>
+      </div>
+      <div class="buttons">
+        <button type="button" class="ghost" data-sample="invalid">رد اعتبارسنجی</button>
+        <button type="button" data-sample="cold">لید سرد · Cold</button>
+        <button type="button" data-sample="warm">لید گرم · Warm</button>
+        <button type="button" data-sample="hot">لید داغ · Hot</button>
+      </div>
+    </section>
+
+    <ol class="pipeline" id="pipeline"></ol>
+
+    <section class="grid three">
+      <article class="panel script-panel">
+        <h2>منطق سیستم</h2>
+        <ol class="talk" id="talk">
+          <li>لید خام از فرم یا وب‌هوک وارد می‌شود.</li>
+          <li>n8n ارکستراسیون است؛ FastAPI منبع حقیقت CRM و امتیاز است.</li>
+          <li>اگر داده ناقص باشد، قبل از دیتابیس رد می‌شود.</li>
+          <li>خروجی LLM با اسکیما چک می‌شود؛ اولویت ذخیره‌شده از مدل نیست.</li>
+          <li>لید داغ پیش‌نویس می‌گیرد؛ ارسال به مشتری فقط بعد از تأیید انسان است.</li>
+          <li>تلگرام نتیجه تیم فروش است؛ بدون ربات، skip صادقانه است نه موفقیت جعلی.</li>
+        </ol>
+      </article>
+      <article class="panel timeline-panel">
+        <h2>تایم‌لاین اجرا</h2>
+        <ol id="timeline" class="timeline"></ol>
+      </article>
+      <article class="panel result-panel">
+        <h2>نتیجه و تصمیم</h2>
+        <div id="result" class="result empty">یک سناریو را اجرا کنید.</div>
+      </article>
+    </section>
+
+    <section class="panel board-panel">
+      <h2>تخته CRM</h2>
+      <div class="board" id="board"></div>
+    </section>
+
+    <footer>
+      n8n ارکستراسیون · FastAPI منبع حقیقت · قبول/رد انسانی قبل از پیام مشتری · Git و Docker برای نگهداری
+    </footer>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>

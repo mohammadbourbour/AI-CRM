@@ -14,8 +14,32 @@ copy .env.example .env
 docker compose up --build
 ```
 
-Backend: [http://localhost:8000/health](http://localhost:8000/health)
+Backend: [http://localhost:8000](http://localhost:8000) (client dashboard)
+Health: [http://localhost:8000/health](http://localhost:8000/health)
 n8n: [http://localhost:5678](http://localhost:5678)
+
+## Client dashboard
+
+Open `/`. Leave **ارسال به n8n** selected after the workflow is **Published**. Each click POSTs that sample to ` /webhook/lead-intake `. Watch the run under n8n **Executions**.
+
+The **مستقیم CRM** radio is only a fallback if n8n is down.
+
+| Button | Outcome |
+|--------|---------|
+| **رد اعتبارسنجی** | Invalid payload; validate fails; **no CRM row** |
+| **Cold / Warm** | Qualified with that priority; no auto-draft |
+| **Hot** | Draft stored as `awaiting_approval` |
+| **قبول پیش‌نویس** | `mock_sent`, lead `contacted` |
+| **رد پیش‌نویس** | `skipped`, lead stays `qualified`, draft kept for audit |
+
+1. Validates and enriches the lead (same steps as n8n)
+2. Writes to CRM and qualifies (backend LLM or mock + deterministic priority)
+3. Drafts a follow-up only for hot leads (still HITL)
+4. Posts the **analysis result** to the Telegram channel when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set
+
+Empty Telegram credentials skip the channel post and show `skipped_unconfigured`. That is not a successful send.
+
+Add the bot as a **channel administrator**, then set `TELEGRAM_CHAT_ID` to `-100…` or `@channelusername`.
 
 ## Direct API (no n8n)
 
@@ -25,7 +49,7 @@ Use the demo webhook secret from `.env.example`.
 curl.exe -s -X POST http://localhost:8000/api/webhooks/leads -H "Content-Type: application/json" -H "X-Webhook-Secret: dev-webhook-secret-change-me" --data-binary "@examples/lead_hot.json"
 ```
 
-Qualify (computes priority; hot leads attempt Telegram from this endpoint only):
+Qualify (computes priority; every successful qualify attempts a Telegram **result** post to the configured chat/channel):
 
 ```powershell
 curl.exe -s -X POST http://localhost:8000/api/leads/1/qualify
@@ -42,6 +66,8 @@ Follow-up draft (human still must approve before anything is "sent"):
 ```powershell
 curl.exe -s -X POST http://localhost:8000/api/leads/1/followup/draft
 curl.exe -s -X POST http://localhost:8000/api/leads/1/approve-followup
+# or reject instead of approve:
+# curl.exe -s -X POST http://localhost:8000/api/leads/1/reject-followup
 ```
 
 Duplicate webhook (same `external_id`) returns the existing lead:
@@ -85,4 +111,4 @@ See [examples/dataset/README.md](../examples/dataset/README.md). Classification 
 
 ## Human-in-the-loop check
 
-Calling approve **before** a draft exists must return 409. Calling approve a second time must return 409. The draft is never auto-sent.
+Calling approve or reject **before** a draft exists must return 409. Calling approve a second time, or approve after reject, must return 409. The draft is never auto-sent.

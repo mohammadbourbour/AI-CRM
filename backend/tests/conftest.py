@@ -8,6 +8,8 @@ os.environ["TELEGRAM_CHAT_ID"] = ""
 os.environ["GOOGLE_SHEETS_CREDENTIALS_FILE"] = ""
 os.environ["GOOGLE_SHEETS_CREDENTIALS_JSON"] = ""
 os.environ["GOOGLE_SHEETS_SPREADSHEET_ID"] = ""
+os.environ["N8N_WEBHOOK_URL"] = ""
+os.environ["N8N_PUBLIC_URL"] = "http://localhost:5678"
 os.environ["LOG_LEVEL"] = "WARNING"
 
 from app.config import get_settings

@@ -136,7 +136,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DECISIONS.md]
 
 **Ops-friendly demo**
 - Docker Compose: API on `:8000`, n8n on `:5678` (or `N8N_PORT_HOST`)
-- 31 pytest tests on in-memory SQLite
+- 45 pytest tests on in-memory SQLite
 - 110+ synthetic leads + batch runner
 - PII-masked logs (`j***@domain.com`)
 
@@ -166,7 +166,8 @@ docker compose up --build
 
 | Service | URL |
 |---------|-----|
-| API | http://localhost:8000 |
+| **Dashboard** | http://localhost:8000 |
+| API | http://localhost:8000/docs |
 | Health | http://localhost:8000/health |
 | n8n | http://localhost:5678 |
 
@@ -192,6 +193,12 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Full notes: [n8n/README.md](n8n/README.md)
 
 ## Demo
+
+1. `docker compose up --build`
+2. Import and **Publish** `n8n/workflows/lead-qualification.json` in n8n
+3. Open [http://localhost:8000](http://localhost:8000) and run **invalid / Cold / Warm / Hot** (default path posts the sample to n8n)
+
+The dashboard POSTs the selected sample to `/webhook/lead-intake`. Watch the run under n8n **Executions**. Telegram and Google Sheets only send when configured; otherwise the status is `skipped_unconfigured`.
 
 Hot lead through the backend (secret from `.env.example`):
 
@@ -254,6 +261,7 @@ PATCH  /api/leads/{id}
 POST   /api/leads/{id}/qualify
 POST   /api/leads/{id}/followup/draft
 POST   /api/leads/{id}/approve-followup
+POST   /api/leads/{id}/reject-followup
 POST   /api/webhooks/leads     Header: X-Webhook-Secret
 POST   /api/exports/google-sheets
 ```
