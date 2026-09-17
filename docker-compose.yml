@@ -5,7 +5,8 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: sqlite:////app/data/crm.db
       N8N_WEBHOOK_URL: http://n8n:5678/webhook/lead-intake

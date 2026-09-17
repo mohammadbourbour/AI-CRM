@@ -2,7 +2,21 @@
 
 این همان مسیری است که برای مصاحبه رز باید دست‌تان باشد. گوگل‌شیت و تلگرام را **با حساب خودتان** وصل می‌کنید؛ از این محیط ابری نمی‌شود وارد جیمیل شما شد.
 
-مخزن: https://github.com/mohammadbourbour/AI-CRM
+مخزن: https://github.com/mohammadbourbour/AI-CRM  
+PR: https://github.com/mohammadbourbour/AI-CRM/pull/1
+
+## Merge روی لوکال (برای تست)
+
+در ریشه کلون:
+
+```powershell
+git fetch origin
+git checkout main
+git pull origin main
+git merge origin/cursor/demo-dashboard-telegram-7431
+```
+
+اگر GitHub را Merge کردید، فقط `git checkout main` و `git pull origin main` کافی است. بعد از merge، از بخش ۰ ادامه دهید.
 
 ---
 
