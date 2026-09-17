@@ -376,7 +376,7 @@ def run_demo(db: Session, sample: str = "hot", lead_in: LeadCreate | None = None
         db.refresh(run)
         return run, enrichment
 
-    provider = "openai" if settings.openai_enabled else "mock"
+    provider = "groq" if settings.groq_enabled else "mock"
     _set_stage(
         stages,
         "qualify",

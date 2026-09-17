@@ -10,10 +10,10 @@
 
 | جزء | نقش |
 |-----|-----|
-| **n8n** | orchestration: validation، enrichment، LLM (OpenAI/Gemini)، فراخوانی API، routing، کانال‌های اختیاری |
+| **n8n** | orchestration: validation، enrichment، LLM (Groq)، فراخوانی API، routing، کانال‌های اختیاری |
 | **FastAPI** | CRM، قوانین priority، qualify، draft، approve، mock send |
 | **SQLite** | ذخیره لیدها |
-| **Mock LLM** | وقتی `OPENAI_API_KEY` خالی است (heuristic — نه مدل واقعی) |
+| **Mock LLM** | وقتی `GROQ_API_KEY` خالی است (heuristic — نه مدل واقعی) |
 
 ---
 
@@ -44,7 +44,7 @@ docker compose up --build -d
 curl.exe -s http://localhost:8000/health
 ```
 
-انتظار: `"openai":"mock"` و `"telegram":"disabled"` و `"google_sheets":"disabled"` (بدون credential طبیعی است).
+انتظار: `"groq":"mock"` و `"telegram":"disabled"` و `"google_sheets":"disabled"` (بدون credential طبیعی است).
 
 ### فعال‌سازی workflow در n8n (یک بار)
 
@@ -63,8 +63,7 @@ curl.exe -s http://localhost:8000/health
 لید → webhook n8n
     → Validate (ایمیل/نام/پیام)
     → Enrichment (دامنه ایمیل، seniority — محلی)
-    → AI Agent + OpenAI Chat Model (اگر key و credential باشد) → وگرنه skip
-    → AI Agent + Gemini Chat Model (اگر OpenAI نبود و key باشد) → وگرنه skip
+    → AI Agent + Groq Chat Model (اگر key و credential باشد) → وگرنه skip
     → Parse JSON (اعتبارسنجی ساختار)
     → POST /api/webhooks/leads (با X-Webhook-Secret)
     → POST /api/leads/{id}/qualify  ← منبع حقیقت priority
@@ -145,7 +144,7 @@ python scripts/run_batch_demo.py --n8n-url http://localhost:5679/webhook/lead-in
 
 | لایه | چه می‌کند |
 |------|-----------|
-| n8n AI Agent (OpenAI / Gemini) | pre-qualify برای audit در پاسخ workflow (`ai_prequalify`) |
+| n8n AI Agent (Groq) | pre-qualify برای audit در پاسخ workflow (`ai_prequalify`) |
 | Backend `/qualify` | **منبع حقیقت** برای priority ذخیره‌شده در CRM |
 
 اگر هیچ key نباشد:
@@ -186,7 +185,7 @@ cd backend
 python -m pytest -v
 ```
 
-باید **26 passed** ببینی.
+باید **45 passed** ببینی.
 
 ---
 
@@ -194,8 +193,7 @@ python -m pytest -v
 
 ```env
 WEBHOOK_SECRET=dev-webhook-secret-change-me
-OPENAI_API_KEY=          # خالی = mock
-GEMINI_API_KEY=          # n8n fallback
+GROQ_API_KEY=            # خالی = mock
 N8N_TELEGRAM_ALERTS=false
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=

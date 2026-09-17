@@ -11,8 +11,9 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "sqlite:///./data/crm.db"
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-8b-instant"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     n8n_webhook_url: str = ""
@@ -25,8 +26,8 @@ class Settings(BaseSettings):
     google_sheets_worksheet: str = "Qualified Leads"
 
     @property
-    def openai_enabled(self) -> bool:
-        return bool(self.openai_api_key.strip())
+    def groq_enabled(self) -> bool:
+        return bool(self.groq_api_key.strip())
 
     @property
     def telegram_enabled(self) -> bool:

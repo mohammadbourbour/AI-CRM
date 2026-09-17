@@ -99,7 +99,7 @@ class FollowUpRejectResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
-    openai: str
+    groq: str
     telegram: str
     google_sheets: str
 
@@ -155,5 +155,5 @@ class DemoMetaResponse(BaseModel):
     n8n_executions_url: str
     n8n_sheets_configured: bool
     telegram: str
-    openai: str
+    groq: str
     google_sheets: str

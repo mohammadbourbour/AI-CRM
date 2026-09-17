@@ -27,7 +27,7 @@ function renderHealth(health, meta) {
   const sheetsOn = Boolean(meta && meta.n8n_sheets_configured) || health.google_sheets === "enabled";
   const chips = [
     ["n8n", n8nOn ? "on" : "off", n8nOn ? "webhook" : "no URL"],
-    ["OpenAI", health.openai === "enabled" ? "on" : "off", health.openai],
+    ["Groq", health.groq === "enabled" ? "on" : "off", health.groq],
     ["Telegram", health.telegram === "enabled" ? "on" : "off", health.telegram],
     ["Sheets", sheetsOn ? "on" : "off", sheetsOn ? "id set" : "off"],
   ];
