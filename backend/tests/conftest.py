@@ -2,7 +2,7 @@ import os
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["WEBHOOK_SECRET"] = "test-webhook-secret"
-os.environ["OPENAI_API_KEY"] = ""
+os.environ["GROQ_API_KEY"] = ""
 os.environ["TELEGRAM_BOT_TOKEN"] = ""
 os.environ["TELEGRAM_CHAT_ID"] = ""
 os.environ["GOOGLE_SHEETS_CREDENTIALS_FILE"] = ""

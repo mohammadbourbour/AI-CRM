@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/FastAPI-SQLite-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/n8n-AI%20Agent-EA4B71?logo=n8n&logoColor=white" alt="n8n">
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/LLM-OpenAI%20%2B%20Gemini-412991?logo=openai&logoColor=white" alt="LLM">
+  <img src="https://img.shields.io/badge/LLM-Groq-F55036?logo=meta&logoColor=white" alt="LLM">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT">
 </p>
 
@@ -36,7 +36,7 @@ Unstructured inbound leads waste sales time. This system automates the slice tha
 | **Capture** | Webhook intake from a form, site, or batch file |
 | **Validate** | Bad payloads never reach CRM |
 | **Enrich** | Local domain / seniority hints (no fake Clearbit) |
-| **Pre-qualify** | n8n **AI Agent** + OpenAI Chat Model, Gemini fallback |
+| **Pre-qualify** | n8n **AI Agent** + official **Groq Chat Model** (`llama-3.1-8b-instant`) |
 | **Persist** | FastAPI + SQLite, insert-first idempotency on `external_id` |
 | **Score** | Backend LLM (or honest mock) + **deterministic** priority rules |
 | **Route** | Hot vs warm vs cold |
@@ -48,7 +48,7 @@ The model classifies and writes prose. **Code** owns validation, persistence, pr
 
 ## n8n workflow
 
-Official n8n nodes — **AI Agent**, **Telegram**, **WhatsApp**, **Google Sheets** — plus HTTP only where there is no first-party node (FastAPI CRM, Resend).
+Official n8n nodes — **AI Agent**, **Groq Chat Model**, **Telegram**, **WhatsApp**, **Google Sheets** — plus HTTP only where there is no first-party node (FastAPI CRM, Resend).
 
 <p align="center">
   <img src="docs/images/n8n-workflow.png" alt="n8n Lead Qualification workflow canvas" width="100%">
@@ -60,7 +60,7 @@ Official n8n nodes — **AI Agent**, **Telegram**, **WhatsApp**, **Google Sheets
 |------|--------|----------|
 | **1. Intake** | Webhook → Validate → IF | Reject missing name / email / company / message |
 | **2. Enrichment** | Code | Email domain, guessed site, seniority — local only |
-| **3. AI qualification** | AI Agent + OpenAI Chat Model → Gemini Agent fallback | Structured JSON; skip honestly if credentials are missing |
+| **3. AI qualification** | AI Agent + Groq Chat Model | Structured JSON; skip honestly if `GROQ_API_KEY` / credential is missing |
 | **4. CRM** | HTTP → FastAPI | Create lead, `/qualify`, read-back. Backend priority wins |
 | **4b. Sheets** | Official Create sheet + Append or update row | Upsert qualified lead by `id`; skip if spreadsheet id is empty |
 | **5. Routing & HITL** | IF hot → draft → official Telegram alert | Customer copy is **not** sent here |
@@ -123,8 +123,8 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DECISIONS.md]
 - Duplicate `external_id` returns the existing CRM row (no double insert)
 
 **AI that is honest**
-- OpenAI primary → Gemini fallback in n8n
-- Empty keys → skip n8n LLM (`skipped_unconfigured`) and use the backend **mock** (keyword heuristics, logged as mock)
+- Groq (`llama-3.1-8b-instant`) for backend qualify/draft and n8n pre-qualify
+- Empty `GROQ_API_KEY` → skip n8n LLM (`skipped_unconfigured`) and use the backend **mock** (keyword heuristics, logged as mock)
 - Structured JSON + Pydantic; one retry; then `qualification_error` + HTTP 503 — lead stays retryable
 
 **Channels without fake success**
@@ -136,7 +136,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DECISIONS.md]
 
 **Ops-friendly demo**
 - Docker Compose: API on `:8000`, n8n on `:5678` (or `N8N_PORT_HOST`)
-- 38 pytest tests on in-memory SQLite
+- 45 pytest tests on in-memory SQLite
 - 110+ synthetic leads + batch runner
 - PII-masked logs (`j***@domain.com`)
 
@@ -147,7 +147,7 @@ This is a **portfolio slice**, not a multi-tenant CRM. The same pattern scales t
 | Today (demo) | Next (production-shaped) |
 |--------------|---------------------------|
 | SQLite, one process | Postgres + queues (Redis / SQS) |
-| Mock or single OpenAI key | Per-tenant keys, spend caps, eval set |
+| Mock or single Groq key | Per-tenant keys, spend caps, eval set |
 | Shared webhook secret | HMAC-signed webhooks, OAuth / API keys |
 | One n8n canvas | Versioned workflows in CI, staging vs prod |
 | Mock send + optional WA/email | CRM of record (HubSpot / Salesforce) + calendar booking |
@@ -171,7 +171,7 @@ docker compose up --build
 | Health | http://localhost:8000/health |
 | n8n | http://localhost:5678 |
 
-`openai` on `/health` is `"mock"` until you set `OPENAI_API_KEY`.
+`groq` on `/health` is `"mock"` until you set `GROQ_API_KEY`.
 
 Without Docker:
 
@@ -186,7 +186,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ### n8n
 
 1. Import [`n8n/workflows/lead-qualification.json`](n8n/workflows/lead-qualification.json)
-2. Attach credentials: OpenAI, optional Gemini / Telegram / WhatsApp / Google Sheets
+2. Attach credentials: Groq, optional Telegram / WhatsApp / Google Sheets
 3. **Publish / activate** (n8n 2.x needs publish, not only a toggle)
 4. n8n must call `http://backend:8000` inside Compose, not `localhost`
 
@@ -204,6 +204,12 @@ Exact Persian checklist: [docs/MORNING_RUN_FA.md](docs/MORNING_RUN_FA.md)
 The dashboard POSTs the sample to n8n; n8n calls CRM. Telegram and Google Sheets only send when configured — otherwise `skipped_unconfigured`.
 
 Interview talk-track: [docs/INTERVIEW_RAZ_FA.md](docs/INTERVIEW_RAZ_FA.md) · sample-work: [docs/SAMPLE_WORK_FA.md](docs/SAMPLE_WORK_FA.md)
+
+1. `docker compose up --build`
+2. Import and **Publish** `n8n/workflows/lead-qualification.json` in n8n
+3. Open [http://localhost:8000](http://localhost:8000) and run **invalid / Cold / Warm / Hot** (default path posts the sample to n8n)
+
+The dashboard POSTs the selected sample to `/webhook/lead-intake`. Watch the run under n8n **Executions**. Telegram and Google Sheets only send when configured; otherwise the status is `skipped_unconfigured`.
 
 Hot lead through the backend (secret from `.env.example`):
 
@@ -279,8 +285,8 @@ n8n public hooks (after activate): `POST /webhook/lead-intake`, `POST /webhook/l
 |-------|--------|
 | API | Python, FastAPI, Pydantic, SQLAlchemy |
 | Store | SQLite (Compose volume `./data`) |
-| Orchestration | n8n 2.x — AI Agent, Telegram, WhatsApp, Google Sheets, HTTP |
-| LLM | OpenAI, Gemini fallback, MockLLMProvider |
+| Orchestration | n8n 2.x — AI Agent, Groq Chat Model, Telegram, WhatsApp, Google Sheets, HTTP |
+| LLM | Groq (`llama-3.1-8b-instant`), MockLLMProvider |
 | Notify | Telegram Bot API, WhatsApp Cloud, Resend |
 | Tests | pytest, in-memory SQLite |
 | Run | Docker Compose |
@@ -291,8 +297,7 @@ Copy [`.env.example`](.env.example). Empty optional keys disable that provider; 
 
 | Variable | Role |
 |----------|------|
-| `OPENAI_API_KEY` | Backend LLM; also gates the n8n AI Agent |
-| `GEMINI_API_KEY` | n8n Gemini fallback agent |
+| `GROQ_API_KEY` / `GROQ_MODEL` | Backend LLM and n8n AI Agent gate. Default model: `llama-3.1-8b-instant` |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Backend hot notify |
 | `N8N_TELEGRAM_ALERTS` | Opt-in n8n sales alert (`false` by default) |
 | `WHATSAPP_*` | Official WhatsApp node after approval |

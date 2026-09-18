@@ -138,36 +138,31 @@ class MockLLMProvider:
         )
 
 
-class OpenAIProvider:
+class GroqProvider:
+    """Groq Chat Completions via the OpenAI-compatible SDK."""
+
     def __init__(self, settings: Settings) -> None:
         from openai import OpenAI
 
-        self._model = settings.openai_model
-        self._client = OpenAI(api_key=settings.openai_api_key, timeout=30.0)
-        self._use_json_schema = model_supports_json_schema(self._model)
+        self._model = settings.groq_model.strip() or "llama-3.1-8b-instant"
+        self._client = OpenAI(
+            api_key=settings.groq_api_key,
+            base_url=settings.groq_base_url.strip() or "https://api.groq.com/openai/v1",
+            timeout=30.0,
+        )
 
-    def _response_format(self) -> dict:
-        if self._use_json_schema:
-            return {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "lead_qualification",
-                    "strict": True,
-                    "schema": QUALIFICATION_JSON_SCHEMA,
-                },
-            }
-        return {"type": "json_object"}
-
-    def _complete(self, messages: list[dict]) -> str:
+    def _complete(self, messages: list[dict], *, json_object: bool) -> str:
         from openai import APIError, APITimeoutError
 
+        kwargs: dict = {
+            "model": self._model,
+            "messages": messages,
+            "temperature": 0 if json_object else 0.3,
+        }
+        if json_object:
+            kwargs["response_format"] = {"type": "json_object"}
         try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                response_format=self._response_format(),
-                temperature=0,
-            )
+            response = self._client.chat.completions.create(**kwargs)
         except APITimeoutError as exc:
             raise QualificationFailedError("LLM request timed out") from exc
         except APIError as exc:
@@ -190,7 +185,7 @@ class OpenAIProvider:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ]
-        raw = self._complete(messages)
+        raw = self._complete(messages, json_object=True)
         try:
             return parse_qualification(raw)
         except (json.JSONDecodeError, ValidationError) as exc:
@@ -208,7 +203,7 @@ class OpenAIProvider:
                     ),
                 }
             )
-            retry_raw = self._complete(messages)
+            retry_raw = self._complete(messages, json_object=True)
             try:
                 return parse_qualification(retry_raw)
             except (json.JSONDecodeError, ValidationError) as retry_exc:
@@ -217,8 +212,6 @@ class OpenAIProvider:
                 ) from retry_exc
 
     def generate_followup_draft(self, lead: Lead) -> str:
-        from openai import APIError, APITimeoutError
-
         prompt = (
             "Write a short, professional follow-up email body for this B2B lead. "
             "Do not include URLs. Do not claim a meeting is booked.\n"
@@ -227,34 +220,27 @@ class OpenAIProvider:
             f"Summary: {lead.ai_summary or lead.message}\n"
             f"Recommended next action: {lead.recommended_next_action or 'discovery call'}\n"
         )
-        try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You write concise sales follow-up drafts. Plain text only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-            )
-        except APITimeoutError as exc:
-            raise QualificationFailedError("LLM request timed out") from exc
-        except APIError as exc:
-            raise QualificationFailedError(f"LLM provider error: {exc}") from exc
-        content = response.choices[0].message.content
-        if not content or not content.strip():
+        content = self._complete(
+            [
+                {
+                    "role": "system",
+                    "content": "You write concise sales follow-up drafts. Plain text only.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            json_object=False,
+        )
+        if not content.strip():
             raise QualificationFailedError("LLM returned an empty follow-up draft")
         return content.strip()
 
 
 def get_llm_provider() -> LLMProvider:
     settings = get_settings()
-    if settings.openai_enabled:
-        logger.info("Using OpenAIProvider model=%s", settings.openai_model)
-        return OpenAIProvider(settings)
+    if settings.groq_enabled:
+        logger.info("Using GroqProvider model=%s", settings.groq_model)
+        return GroqProvider(settings)
     logger.warning(
-        "OPENAI_API_KEY absent; using MockLLMProvider. Not production inference."
+        "GROQ_API_KEY absent; using MockLLMProvider. Not production inference."
     )
     return MockLLMProvider()

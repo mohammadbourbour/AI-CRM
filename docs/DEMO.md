@@ -1,6 +1,6 @@
 # Demo script
 
-This walkthrough uses the **mock LLM** unless you set `OPENAI_API_KEY`. Telegram stays disabled unless both bot token and chat id are set. That is expected and honest.
+This walkthrough uses the **mock LLM** unless you set `GROQ_API_KEY`. Telegram stays disabled unless both bot token and chat id are set. That is expected and honest.
 
 Copy env first:
 

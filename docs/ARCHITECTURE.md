@@ -8,10 +8,9 @@ Portfolio implementation of an AI-assisted sales and CRM automation workflow. It
 flowchart TD
     LeadSource[LeadSource] --> n8n[n8n_Webhook]
     n8n --> ValidateN8n[Validate_and_enrich]
-    ValidateN8n --> OpenAI[AI_Agent_OpenAI]
-    OpenAI -->|fail_or_skip| Gemini[AI_Agent_Gemini]
-    OpenAI -->|ok| ParseJSON[Parse_structured_JSON]
-    Gemini --> ParseJSON
+    ValidateN8n --> Groq[AI_Agent_Groq]
+    Groq -->|ok| ParseJSON[Parse_structured_JSON]
+    Groq -->|fail_or_skip| ParseJSON
     ParseJSON --> WebhookAPI["POST /api/webhooks/leads"]
     WebhookAPI --> AuthCheck{X-Webhook-Secret}
     AuthCheck -->|401| Reject[Reject]
@@ -50,7 +49,7 @@ flowchart TD
 | Layer | Owns | Does not own |
 |-------|------|----------------|
 | n8n | Webhook intake, payload validation, local enrichment, official AI Agent pre-qualify, CRM HTTP orchestration, official Google Sheets upsert, official Telegram/WhatsApp adapters, HITL approve webhook | Deterministic CRM priority, SQLite persistence |
-| FastAPI | Validation, CRM, priority, HITL flag, backend Telegram on qualify | Visual orchestration, Gemini fallback |
+| FastAPI | Validation, CRM, priority, HITL flag, backend Telegram on qualify | Visual orchestration |
 | LLM | Intent, industry, pain points, summary, draft text | Database writes, sending messages, arbitrary tools |
 | SQLite | Lead records | Business rules |
 
@@ -87,9 +86,9 @@ n8n never auto-sends follow-up copy on intake. Hot IF still calls `POST /api/lea
 
 ## n8n orchestration vs backend qualification
 
-n8n can call OpenAI then Gemini to produce structured JSON **before** CRM writes. That output is validated in n8n and stored on the workflow response as `ai_prequalify`. The backend `/qualify` call remains the CRM source of truth for persisted priority.
+n8n can call Groq to produce structured JSON **before** CRM writes. That output is validated in n8n and stored on the workflow response as `ai_prequalify`. The backend `/qualify` call remains the CRM source of truth for persisted priority.
 
-If OpenAI/Gemini keys are absent, n8n skips those nodes (`skipped_unconfigured`) and still persists + qualifies via the backend mock/OpenAI provider.
+If `GROQ_API_KEY` is absent, n8n skips the Groq node (`skipped_unconfigured`) and still persists + qualifies via the backend mock/Groq provider.
 
 If backend `/qualify` returns 503, n8n takes the **Qualification Failed Review** path: the lead stays retryable, no draft, no customer send.
 
@@ -126,6 +125,6 @@ Approve then mock-send happen in one explicit human call: `POST /api/leads/{id}/
 
 ## Providers
 
-If `OPENAI_API_KEY` is empty, qualification uses `MockLLMProvider` (keyword heuristics). That is **not** production inference.
+If `GROQ_API_KEY` is empty, qualification uses `MockLLMProvider` (keyword heuristics). That is **not** production inference.
 
 If Telegram credentials are empty, notify is skipped and logged as disabled. Qualification still succeeds.

@@ -9,8 +9,7 @@ This workflow is truthful: missing API keys are skipped, not faked as successful
 - Webhook intake (`/webhook/lead-intake`)
 - Payload validation before CRM
 - Optional local lead enrichment (domain / seniority — no fake enrichment API)
-- Official **AI Agent** + **OpenAI Chat Model** as primary structured qualification
-- Official **Google Gemini Chat Model** as fallback when OpenAI is missing or unusable
+- Official **AI Agent** + **Groq Chat Model** (`llama-3.1-8b-instant`) for structured pre-qualification
 - JSON parse + schema checks before CRM writes
 - Official **Telegram** node for the optional sales alert
 - Official **WhatsApp Business Cloud** node after human approval
@@ -26,16 +25,15 @@ This workflow is truthful: missing API keys are skipped, not faked as successful
 1. `Lead Intake Webhook`
 2. `Validate Incoming Lead` — invalid payloads go to **Invalid Payload Review** (no CRM write)
 3. `Optional Lead Enrichment` — local only
-4. `AI Agent` (OpenAI Chat Model) if `OPENAI_API_KEY` is set **and** an OpenAI credential is attached, else skip
-5. `AI Agent — Gemini Fallback` if OpenAI failed/skipped and `GEMINI_API_KEY` is set **and** a Gemini credential is attached
-6. `Parse & Validate LLM JSON` — n8n pre-qualification is **audit only**; backend still qualifies
-7. `Create Lead in CRM` → `POST /api/webhooks/leads` with `X-Webhook-Secret`
-8. `Backend Qualify Lead` → `POST /api/leads/{id}/qualify` (retries, then review path on failure)
-9. `Get CRM Lead`
-10. Official Google Sheets: `Plan Sheets Export` → `Create sheet` (continue if the tab already exists) → `Append or update row in sheet` matched on CRM `id`. Skipped when `GOOGLE_SHEETS_SPREADSHEET_ID` is empty
-11. `Resume CRM Lead` so `$json.priority` is the CRM record again
-12. If `priority == hot` → `Draft Follow-up (HITL)` then optional Telegram sales alert
-13. Respond with `outcome`, routing, and channel statuses (`sent` | `exported` | `skipped_unconfigured` | `awaiting_human_approval` | `not_applicable`)
+4. `AI Agent` (Groq Chat Model) if `GROQ_API_KEY` is set **and** a Groq credential is attached, else skip
+5. `Parse & Validate LLM JSON` — n8n pre-qualification is **audit only**; backend still qualifies
+6. `Create Lead in CRM` → `POST /api/webhooks/leads` with `X-Webhook-Secret`
+7. `Backend Qualify Lead` → `POST /api/leads/{id}/qualify` (retries, then review path on failure)
+8. `Get CRM Lead`
+9. Official Google Sheets: `Plan Sheets Export` → `Create sheet` (continue if the tab already exists) → `Append or update row in sheet` matched on CRM `id`. Skipped when `GOOGLE_SHEETS_SPREADSHEET_ID` is empty
+10. `Resume CRM Lead` so `$json.priority` is the CRM record again
+11. If `priority == hot` → `Draft Follow-up (HITL)` then optional Telegram sales alert
+12. Respond with `outcome`, routing, and channel statuses (`sent` | `exported` | `skipped_unconfigured` | `awaiting_human_approval` | `not_applicable`)
 
 Warm/cold leads are not auto-drafted. Customer WhatsApp/email are **not** sent on intake.
 
@@ -72,8 +70,7 @@ Customer follow-up text is never auto-sent.
 2. Open n8n (`http://localhost:5678`, or `N8N_PORT_HOST=5679`).
 3. **Workflows → Import from File** → `n8n/workflows/lead-qualification.json`.
 4. Map credentials on the official nodes:
-   - **OpenAI Chat Model** → OpenAI account
-   - **Google Gemini Chat Model** → Google Gemini (PaLM) API (fallback only)
+   - **Groq Chat Model** → Groq account (API key from [console.groq.com](https://console.groq.com/keys))
    - **Send a text message** → Telegram account (already wired to `Telegram account` if that credential exists)
    - **Send message** → WhatsApp account
    - **Create sheet** and **Append or update row in sheet** → Google Sheets OAuth2 account
@@ -101,8 +98,7 @@ Passed through `docker-compose.yml`:
 |----------|---------|
 | `BACKEND_BASE_URL` | `http://backend:8000` on Docker |
 | `WEBHOOK_SECRET` | Must match backend |
-| `OPENAI_API_KEY` / `OPENAI_MODEL` | Gate + default model for the OpenAI Chat Model sub-node. Also create an **OpenAI** credential in n8n. |
-| `GEMINI_API_KEY` / `GEMINI_MODEL` | Gate for the Gemini fallback agent. Also create a **Google Gemini (PaLM)** credential. |
+| `GROQ_API_KEY` / `GROQ_MODEL` | Gate + default model for the Groq Chat Model sub-node. Also create a **Groq** credential in n8n. |
 | `N8N_TELEGRAM_ALERTS` | Set `true` to allow n8n Telegram sales alerts |
 | `TELEGRAM_CHAT_ID` | Chat id for the official Telegram node (bot token lives in the Telegram credential) |
 | `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_TO` | Recipient routing for the official WhatsApp node (access token lives in the WhatsApp credential) |

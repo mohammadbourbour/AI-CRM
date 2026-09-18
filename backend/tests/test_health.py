@@ -6,6 +6,6 @@ def test_health(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["openai"] == "mock"
+    assert body["groq"] == "mock"
     assert body["telegram"] == "disabled"
     assert body["google_sheets"] == "disabled"

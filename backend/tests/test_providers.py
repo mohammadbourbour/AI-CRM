@@ -10,17 +10,16 @@ from app.services.notification_service import (
 from tests.conftest import HOT_PAYLOAD
 
 
-def test_missing_openai_uses_mock_provider() -> None:
+def test_missing_groq_uses_mock_provider() -> None:
     settings = get_settings()
-    assert settings.openai_enabled is False
+    assert settings.groq_enabled is False
     provider = get_llm_provider()
     assert isinstance(provider, MockLLMProvider)
 
 
 def test_json_schema_model_detection() -> None:
     assert model_supports_json_schema("gpt-4o-mini") is True
-    assert model_supports_json_schema("gpt-4.1") is True
-    assert model_supports_json_schema("gpt-3.5-turbo") is False
+    assert model_supports_json_schema("llama-3.1-8b-instant") is False
 
 
 def test_missing_telegram_does_not_crash() -> None:
