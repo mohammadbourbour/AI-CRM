@@ -18,7 +18,7 @@ def test_demo_meta(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["telegram"] == "disabled"
-    assert body["openai"] == "mock"
+    assert body["groq"] == "mock"
     assert [stage["id"] for stage in body["stages"]][-1] == "telegram"
     assert "hot" in body["samples"]
     assert "invalid" in body["samples"]

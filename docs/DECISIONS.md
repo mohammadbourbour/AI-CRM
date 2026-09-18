@@ -4,7 +4,7 @@ Portfolio implementation demonstrating an AI-assisted sales and CRM automation w
 
 ## Mock providers by default
 
-`OPENAI_API_KEY` empty → `MockLLMProvider` (keyword heuristics). Logs state this is not production inference.
+`GROQ_API_KEY` empty → `MockLLMProvider` (keyword heuristics). Logs state this is not production inference.
 
 Telegram credentials empty → notify is disabled. The app does not crash and does not pretend a message was delivered.
 
@@ -30,7 +30,7 @@ Failed `/qualify` sets `qualification_error` and leaves `status` unchanged (typi
 
 ## Strict structured output plus one retry
 
-When `OPENAI_MODEL` supports `response_format=json_schema` with `strict: true` (for example `gpt-4o-mini`), that mode is used. Otherwise `json_object`. Pydantic validation always runs. On validation failure the provider retries once with the error text in the prompt, then fails closed with 503.
+Groq uses OpenAI-compatible Chat Completions with `response_format=json_object` (default model `llama-3.1-8b-instant`). Pydantic validation always runs. On validation failure the provider retries once with the error text in the prompt, then fails closed with 503.
 
 ## n8n optional channels
 
@@ -42,9 +42,9 @@ Customer WhatsApp/email run only from the `lead-approve` webhook after a CRM dra
 
 Google Sheets runs on intake after a successful `/qualify`: official **Create sheet** (tab; continues if it already exists) then **Append or update row** matched on CRM `id`. `GOOGLE_SHEETS_SPREADSHEET_ID` empty skips the export. Backend `POST /api/exports/google-sheets` is a complementary full-worksheet snapshot using a service account.
 
-## n8n LLM fallback
+## n8n LLM
 
-OpenAI is the primary n8n LLM via the official **AI Agent** + **OpenAI Chat Model**. Gemini runs only if OpenAI is missing or unusable, via a second **AI Agent** + **Google Gemini Chat Model**. Env keys gate those branches; n8n credentials actually authenticate the nodes. Parse failures do not invent a qualification record.
+The n8n pre-qualify step uses the official **AI Agent** + **Groq Chat Model**. `GROQ_API_KEY` gates the branch; a Groq credential in n8n authenticates the node. Parse failures do not invent a qualification record.
 
 HTTP Request remains only for the FastAPI CRM and Resend. There is no official Resend node. Google Sheets uses the official node (typeVersion 4.7), not HTTP.
 

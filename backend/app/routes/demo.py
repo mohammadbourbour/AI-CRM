@@ -32,7 +32,7 @@ def demo_meta() -> DemoMetaResponse:
         n8n_executions_url=settings.n8n_executions_url,
         n8n_sheets_configured=settings.n8n_sheets_configured,
         telegram="enabled" if settings.telegram_enabled else "disabled",
-        openai="enabled" if settings.openai_enabled else "mock",
+        groq="enabled" if settings.groq_enabled else "mock",
         google_sheets="enabled" if settings.google_sheets_enabled else "disabled",
     )
 

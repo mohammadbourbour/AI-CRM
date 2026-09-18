@@ -37,13 +37,13 @@ async def lifespan(_app: FastAPI):
     configure_engine(settings.database_url)
     init_db()
     logger.info(
-        "startup openai=%s telegram=%s google_sheets=%s",
-        "enabled" if settings.openai_enabled else "mock",
+        "startup groq=%s telegram=%s google_sheets=%s",
+        "enabled" if settings.groq_enabled else "mock",
         "enabled" if settings.telegram_enabled else "disabled",
         "enabled" if settings.google_sheets_enabled else "disabled",
     )
-    if not settings.openai_enabled:
-        logger.warning("OPENAI_API_KEY absent; qualification uses MockLLMProvider (not production).")
+    if not settings.groq_enabled:
+        logger.warning("GROQ_API_KEY absent; qualification uses MockLLMProvider (not production).")
     if not settings.telegram_enabled:
         logger.info("Telegram credentials absent; channel result notify is disabled.")
     if not settings.google_sheets_enabled:

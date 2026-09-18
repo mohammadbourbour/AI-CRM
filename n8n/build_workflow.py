@@ -12,10 +12,8 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent / "workflows" / "lead-qualification.json"
 
-# Credential placeholders. Telegram uses the account already present in this n8n
-# instance; OpenAI / Gemini / WhatsApp are mapped in the editor after import.
-OPENAI_CRED = {"openAiApi": {"id": "openai-account", "name": "OpenAI account"}}
-GEMINI_CRED = {"googlePalmApi": {"id": "google-gemini-account", "name": "Google Gemini(PaLM) Api"}}
+# Credential placeholders. Groq / Telegram / WhatsApp / Sheets are mapped in the editor after import.
+GROQ_CRED = {"groqApi": {"id": "groq-account", "name": "Groq account"}}
 TELEGRAM_CRED = {"telegramApi": {"id": "SRDVCdkvP7R2ebhu", "name": "Telegram account"}}
 WHATSAPP_CRED = {"whatsAppApi": {"id": "whatsapp-account", "name": "WhatsApp account"}}
 SHEETS_CRED = {"googleSheetsOAuth2Api": {"id": "google-sheets-account", "name": "Google Sheets account"}}
@@ -110,12 +108,7 @@ JS_AGENT_USABLE = r"""
 const res = $input.first().json;
 const output = res.output !== undefined ? res.output : (res.text !== undefined ? res.text : null);
 const usable = output !== undefined && output !== null && String(output).trim() !== '' && !res.error;
-return [{ json: { ...res, openai_usable: usable, llm_provider: 'openai' } }];
-""".strip()
-
-JS_TAG_GEMINI = r"""
-const res = $input.first().json;
-return [{ json: { ...res, llm_provider: 'gemini' } }];
+return [{ json: { ...res, groq_usable: usable, llm_provider: 'groq' } }];
 """.strip()
 
 JS_MARK_SKIPPED = r"""
@@ -557,40 +550,19 @@ def agent(i, name, x, y):
     )
 
 
-def openai_chat_model(i, name, x, y):
+def groq_chat_model(i, name, x, y):
     return node(
         i,
         name,
-        "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-        1.2,
-        x,
-        y,
-        {
-            "model": {
-                "__rl": True,
-                "value": "gpt-4o-mini",
-                "mode": "list",
-                "cachedResultName": "gpt-4o-mini",
-            },
-            "options": {"temperature": 0},
-        },
-        {"credentials": OPENAI_CRED},
-    )
-
-
-def gemini_chat_model(i, name, x, y):
-    return node(
-        i,
-        name,
-        "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "@n8n/n8n-nodes-langchain.lmChatGroq",
         1,
         x,
         y,
         {
-            "modelName": "models/gemini-2.0-flash",
-            "options": {"temperature": 0},
+            "model": "llama-3.1-8b-instant",
+            "options": {"temperature": 0, "maxTokensToSample": 1024},
         },
-        {"credentials": GEMINI_CRED},
+        {"credentials": GROQ_CRED},
     )
 
 
@@ -748,7 +720,7 @@ def build():
     nodes = [
         sticky(1, "Group: Intake", "## 1. Intake & validation\nReject bad payloads before CRM or LLM calls.", -120, 180, 420, 200, 5),
         sticky(2, "Group: Enrichment", "## 2. Optional enrichment\nLocal domain/seniority only. No fake Clearbit success.", 420, 40, 380, 160, 6),
-        sticky(3, "Group: AI qualification", "## 3. AI qualification\nOfficial AI Agent + OpenAI Chat Model, Gemini Chat Model fallback.\nSkipped honestly when keys/credentials are missing.", 860, 0, 820, 180, 6),
+        sticky(3, "Group: AI qualification", "## 3. AI qualification\nOfficial AI Agent + Groq Chat Model (`llama-3.1-8b-instant`).\nSkipped honestly when `GROQ_API_KEY` / credential is missing.", 860, 0, 820, 180, 6),
         sticky(4, "Group: CRM", "## 4. CRM orchestration\nBackend is source of truth for persist, qualify, priority.\nHTTP Request stays here (no official FastAPI node).", 1760, 40, 560, 180, 4),
         sticky(8, "Group: Sheets", "## 4b. Google Sheets export\nOfficial **Create sheet** then **Append or update row** by CRM `id`.\nEmpty `GOOGLE_SHEETS_SPREADSHEET_ID` skips; tab-exists errors continue.", 3360, 0, 1280, 180, 4),
         sticky(5, "Group: Routing HITL", "## 5. Routing & HITL\nHot: draft only. Official Telegram node for sales alert.\nCustomer WhatsApp waits for `/webhook/lead-approve`.", 4700, 0, 620, 180, 3),
@@ -761,16 +733,12 @@ def build():
         respond(14, "Respond — Validation Failed", 980, 720),
         code(15, "Optional Lead Enrichment", JS_ENRICH, 720, 320),
         code(16, "Build Qualification Prompt", JS_BUILD_PROMPT, 960, 320),
-        iff(17, "OpenAI Key Present?", "={{ $env.OPENAI_API_KEY }}", None, 1180, 320, op="notEmpty"),
+        iff(17, "Groq Key Present?", "={{ $env.GROQ_API_KEY }}", None, 1180, 320, op="notEmpty"),
         agent(18, "AI Agent", 1420, 160),
-        openai_chat_model(19, "OpenAI Chat Model", 1420, 340),
-        code(20, "Inspect OpenAI Response", JS_AGENT_USABLE, 1680, 160),
-        iff(21, "OpenAI Response Usable?", "={{ $json.openai_usable }}", None, 1920, 160, op="true"),
-        iff(22, "Gemini Key Present?", "={{ $env.GEMINI_API_KEY }}", None, 1180, 500, op="notEmpty"),
-        agent(23, "AI Agent — Gemini Fallback", 1420, 500),
-        gemini_chat_model(24, "Google Gemini Chat Model", 1420, 680),
-        code(25, "Inspect Gemini Response", JS_TAG_GEMINI, 1680, 500),
-        code(26, "Mark LLM Skipped", JS_MARK_SKIPPED, 1420, 780),
+        groq_chat_model(19, "Groq Chat Model", 1420, 340),
+        code(20, "Inspect Groq Response", JS_AGENT_USABLE, 1680, 160),
+        iff(21, "Groq Response Usable?", "={{ $json.groq_usable }}", None, 1920, 160, op="true"),
+        code(26, "Mark LLM Skipped", JS_MARK_SKIPPED, 1420, 500),
         code(27, "Parse & Validate LLM JSON", JS_PARSE, 2160, 320),
         http(
             28,
@@ -889,17 +857,13 @@ def build():
         ("Payload Valid?", "Invalid Payload Review", 1),
         ("Invalid Payload Review", "Respond — Validation Failed"),
         ("Optional Lead Enrichment", "Build Qualification Prompt"),
-        ("Build Qualification Prompt", "OpenAI Key Present?"),
-        ("OpenAI Key Present?", "AI Agent", 0),
-        ("OpenAI Key Present?", "Gemini Key Present?", 1),
-        ("AI Agent", "Inspect OpenAI Response"),
-        ("Inspect OpenAI Response", "OpenAI Response Usable?"),
-        ("OpenAI Response Usable?", "Parse & Validate LLM JSON", 0),
-        ("OpenAI Response Usable?", "Gemini Key Present?", 1),
-        ("Gemini Key Present?", "AI Agent — Gemini Fallback", 0),
-        ("Gemini Key Present?", "Mark LLM Skipped", 1),
-        ("AI Agent — Gemini Fallback", "Inspect Gemini Response"),
-        ("Inspect Gemini Response", "Parse & Validate LLM JSON"),
+        ("Build Qualification Prompt", "Groq Key Present?"),
+        ("Groq Key Present?", "AI Agent", 0),
+        ("Groq Key Present?", "Mark LLM Skipped", 1),
+        ("AI Agent", "Inspect Groq Response"),
+        ("Inspect Groq Response", "Groq Response Usable?"),
+        ("Groq Response Usable?", "Parse & Validate LLM JSON", 0),
+        ("Groq Response Usable?", "Mark LLM Skipped", 1),
         ("Mark LLM Skipped", "Parse & Validate LLM JSON"),
         ("Parse & Validate LLM JSON", "Create Lead in CRM"),
         ("Create Lead in CRM", "CRM Create OK?"),
@@ -947,13 +911,7 @@ def build():
         idx = edge[2] if len(edge) > 2 else 0
         add_edge(connections, src, dst, idx)
 
-    add_edge(connections, "OpenAI Chat Model", "AI Agent", conn_type="ai_languageModel")
-    add_edge(
-        connections,
-        "Google Gemini Chat Model",
-        "AI Agent — Gemini Fallback",
-        conn_type="ai_languageModel",
-    )
+    add_edge(connections, "Groq Chat Model", "AI Agent", conn_type="ai_languageModel")
 
     workflow = {
         "name": "Lead Qualification",

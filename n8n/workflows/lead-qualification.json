@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "content": "## 3. AI qualification\nOfficial AI Agent + OpenAI Chat Model, Gemini Chat Model fallback.\nSkipped honestly when keys/credentials are missing.",
+        "content": "## 3. AI qualification\nOfficial AI Agent + Groq Chat Model (`llama-3.1-8b-instant`).\nSkipped honestly when `GROQ_API_KEY` / credential is missing.",
         "width": 820,
         "height": 180,
         "color": 6
@@ -258,7 +258,7 @@
           "conditions": [
             {
               "id": "c-17",
-              "leftValue": "={{ $env.OPENAI_API_KEY }}",
+              "leftValue": "={{ $env.GROQ_API_KEY }}",
               "operator": {
                 "type": "string",
                 "operation": "notEmpty",
@@ -271,7 +271,7 @@
         "options": {}
       },
       "id": "00000000-0000-4000-8000-000000000017",
-      "name": "OpenAI Key Present?",
+      "name": "Groq Key Present?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
@@ -302,37 +302,33 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "value": "gpt-4o-mini",
-          "mode": "list",
-          "cachedResultName": "gpt-4o-mini"
-        },
+        "model": "llama-3.1-8b-instant",
         "options": {
-          "temperature": 0
+          "temperature": 0,
+          "maxTokensToSample": 1024
         }
       },
       "id": "00000000-0000-4000-8000-000000000019",
-      "name": "OpenAI Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
       "position": [
         1420,
         340
       ],
       "credentials": {
-        "openAiApi": {
-          "id": "openai-account",
-          "name": "OpenAI account"
+        "groqApi": {
+          "id": "groq-account",
+          "name": "Groq account"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nconst output = res.output !== undefined ? res.output : (res.text !== undefined ? res.text : null);\nconst usable = output !== undefined && output !== null && String(output).trim() !== '' && !res.error;\nreturn [{ json: { ...res, openai_usable: usable, llm_provider: 'openai' } }];"
+        "jsCode": "const res = $input.first().json;\nconst output = res.output !== undefined ? res.output : (res.text !== undefined ? res.text : null);\nconst usable = output !== undefined && output !== null && String(output).trim() !== '' && !res.error;\nreturn [{ json: { ...res, groq_usable: usable, llm_provider: 'groq' } }];"
       },
       "id": "00000000-0000-4000-8000-000000000020",
-      "name": "Inspect OpenAI Response",
+      "name": "Inspect Groq Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -352,7 +348,7 @@
           "conditions": [
             {
               "id": "c-21",
-              "leftValue": "={{ $json.openai_usable }}",
+              "leftValue": "={{ $json.groq_usable }}",
               "operator": {
                 "type": "boolean",
                 "operation": "true",
@@ -365,101 +361,12 @@
         "options": {}
       },
       "id": "00000000-0000-4000-8000-000000000021",
-      "name": "OpenAI Response Usable?",
+      "name": "Groq Response Usable?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
         1920,
         160
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "c-22",
-              "leftValue": "={{ $env.GEMINI_API_KEY }}",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "00000000-0000-4000-8000-000000000022",
-      "name": "Gemini Key Present?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1180,
-        500
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Build Qualification Prompt').item.json.llm_user_prompt }}",
-        "options": {
-          "systemMessage": "You are a B2B sales qualification assistant. Do not invent contact details or URLs. Return JSON only with keys industry, intent (low|medium|high), product_fit (unknown|low|medium|high), priority (cold|warm|hot), pain_points (array of strings), summary, recommended_next_action."
-        }
-      },
-      "id": "00000000-0000-4000-8000-000000000023",
-      "name": "AI Agent \u2014 Gemini Fallback",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3.1,
-      "position": [
-        1420,
-        500
-      ],
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 1500,
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-2.0-flash",
-        "options": {
-          "temperature": 0
-        }
-      },
-      "id": "00000000-0000-4000-8000-000000000024",
-      "name": "Google Gemini Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1,
-      "position": [
-        1420,
-        680
-      ],
-      "credentials": {
-        "googlePalmApi": {
-          "id": "google-gemini-account",
-          "name": "Google Gemini(PaLM) Api"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const res = $input.first().json;\nreturn [{ json: { ...res, llm_provider: 'gemini' } }];"
-      },
-      "id": "00000000-0000-4000-8000-000000000025",
-      "name": "Inspect Gemini Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1680,
-        500
       ]
     },
     {
@@ -472,7 +379,7 @@
       "typeVersion": 2,
       "position": [
         1420,
-        780
+        500
       ]
     },
     {
@@ -1498,76 +1405,18 @@
       "main": [
         [
           {
-            "node": "OpenAI Key Present?",
+            "node": "Groq Key Present?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "OpenAI Key Present?": {
+    "Groq Key Present?": {
       "main": [
         [
           {
             "node": "AI Agent",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Gemini Key Present?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AI Agent": {
-      "main": [
-        [
-          {
-            "node": "Inspect OpenAI Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Inspect OpenAI Response": {
-      "main": [
-        [
-          {
-            "node": "OpenAI Response Usable?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenAI Response Usable?": {
-      "main": [
-        [
-          {
-            "node": "Parse & Validate LLM JSON",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Gemini Key Present?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini Key Present?": {
-      "main": [
-        [
-          {
-            "node": "AI Agent \u2014 Gemini Fallback",
             "type": "main",
             "index": 0
           }
@@ -1581,22 +1430,40 @@
         ]
       ]
     },
-    "AI Agent \u2014 Gemini Fallback": {
+    "AI Agent": {
       "main": [
         [
           {
-            "node": "Inspect Gemini Response",
+            "node": "Inspect Groq Response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Inspect Gemini Response": {
+    "Inspect Groq Response": {
+      "main": [
+        [
+          {
+            "node": "Groq Response Usable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Response Usable?": {
       "main": [
         [
           {
             "node": "Parse & Validate LLM JSON",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark LLM Skipped",
             "type": "main",
             "index": 0
           }
@@ -2022,22 +1889,11 @@
         ]
       ]
     },
-    "OpenAI Chat Model": {
+    "Groq Chat Model": {
       "ai_languageModel": [
         [
           {
             "node": "AI Agent",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Google Gemini Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "AI Agent \u2014 Gemini Fallback",
             "type": "ai_languageModel",
             "index": 0
           }
