@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.exceptions import FollowUpConflictError, QualificationFailedError
 from app.models import FollowUpStatus, Lead, LeadStatus, utc_now
 from app.providers.llm import LLMProvider, get_llm_provider
+from app.services.notification_service import notify_followup_decision
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ def approve_and_send(db: Session, lead: Lead) -> tuple[Lead, str]:
     lead.updated_at = now
     db.commit()
     db.refresh(lead)
+    notify_followup_decision(lead, "approved")
     logger.info(
         "followup_mock_sent lead_id=%s status=%s follow_up_status=%s",
         lead.id,
@@ -80,4 +82,5 @@ def reject_draft(db: Session, lead: Lead) -> Lead:
     lead.updated_at = utc_now()
     db.commit()
     db.refresh(lead)
+    notify_followup_decision(lead, "rejected")
     return lead

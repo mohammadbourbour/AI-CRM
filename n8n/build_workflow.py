@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build n8n/workflows/lead-qualification.json (n8n 2.x compatible).
 
-Official n8n nodes are used for AI, Telegram, WhatsApp, and Google Sheets. HTTP Request is
-kept only for the FastAPI CRM and Resend (no first-party Resend node).
+Official n8n nodes are used for AI, Telegram, and Google Sheets. HTTP Request is
+kept only for the FastAPI CRM.
 """
 
 from __future__ import annotations
@@ -12,10 +12,9 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent / "workflows" / "lead-qualification.json"
 
-# Credential placeholders. Groq / Telegram / WhatsApp / Sheets are mapped in the editor after import.
+# Credential placeholders. Groq / Telegram / Sheets are mapped in the editor after import.
 GROQ_CRED = {"groqApi": {"id": "groq-account", "name": "Groq account"}}
 TELEGRAM_CRED = {"telegramApi": {"id": "SRDVCdkvP7R2ebhu", "name": "Telegram account"}}
-WHATSAPP_CRED = {"whatsAppApi": {"id": "whatsapp-account", "name": "WhatsApp account"}}
 SHEETS_CRED = {"googleSheetsOAuth2Api": {"id": "google-sheets-account", "name": "Google Sheets account"}}
 
 SHEET_FIELDS = [
@@ -209,23 +208,53 @@ return [{ json: {
 """.strip()
 
 JS_TELEGRAM_PLAN = r"""
-const lead = $('Get CRM Lead').first().json;
-const alerts = String($env.N8N_TELEGRAM_ALERTS || '').toLowerCase() === 'true';
-const chat = $env.TELEGRAM_CHAT_ID;
-const enabled = alerts && Boolean(chat);
+function esc(v) {
+  return String(v == null || v === '' ? '—' : v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+const stored = $('Get CRM Lead').first().json;
+const incoming = $input.first().json || {};
+const lead = { ...stored, ...incoming, id: stored.id, priority: stored.priority || incoming.priority };
+const chat = String($env.TELEGRAM_CHAT_ID || '').trim();
+const priority = String(lead.priority || '').toLowerCase();
+const wantAlert = priority === 'hot' || priority === 'warm';
+const enabled = Boolean(chat) && wantAlert;
+const badge = priority === 'hot' ? '🔥 HOT' : (priority === 'warm' ? '🟠 WARM' : '🔵 COLD');
+const headline = priority === 'hot'
+  ? 'Action needed today'
+  : (priority === 'warm' ? 'Keep in the pipeline' : 'Low priority');
+const pain = Array.isArray(lead.pain_points) && lead.pain_points.length
+  ? lead.pain_points.join(', ')
+  : '—';
+const hitl = (priority === 'hot' || lead.follow_up_status === 'awaiting_approval')
+  ? '\n\n<i>A follow-up draft is waiting for human approval. This is a sales-team alert, not a customer message.</i>'
+  : '\n\n<i>This is a sales-team alert, not a customer message.</i>';
 const text = [
-  'HOT lead (n8n sales alert)',
-  'CRM id: ' + lead.id,
-  'Name: ' + lead.name,
-  'Company: ' + lead.company,
-  'Priority: ' + lead.priority,
-  'Summary: ' + (lead.ai_summary || ''),
-  'Next: ' + (lead.recommended_next_action || ''),
-  'Customer follow-up is waiting for human approval. Do not treat this as a sent message.'
-].join('\n');
+  badge + '  <b>' + headline + '</b>',
+  '',
+  '<b>' + esc(lead.name) + '</b> · ' + esc(lead.company),
+  'CRM <code>#' + esc(lead.id) + '</code> · ' + esc(lead.status),
+  esc(lead.email),
+  'Industry: ' + esc(lead.industry),
+  'Intent: ' + esc(lead.intent) + ' · Fit: ' + esc(lead.product_fit),
+  '',
+  '<b>Summary</b>',
+  esc(lead.ai_summary),
+  '',
+  '<b>Next action</b>',
+  esc(lead.recommended_next_action),
+  '',
+  '<b>Pain points</b>',
+  esc(pain)
+].join('\n') + hitl;
+let reason = 'configured';
+if (!chat) reason = 'missing TELEGRAM_CHAT_ID';
+else if (!wantAlert) reason = 'cold_skipped';
 return [{ json: {
   telegram_action: enabled ? 'send' : 'skip',
-  telegram_reason: enabled ? 'configured' : (alerts ? 'missing TELEGRAM_CHAT_ID' : 'N8N_TELEGRAM_ALERTS is not true'),
+  telegram_reason: reason,
   telegram_chat_id: chat || '',
   telegram_text: text
 } }];
@@ -242,11 +271,14 @@ const upserted = safe('Append or update row in sheet');
 let telegramStatus = 'skipped_unconfigured';
 if (plan.telegram_action === 'send') {
   telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';
+} else if (plan.telegram_reason === 'cold_skipped') {
+  telegramStatus = 'skipped_cold';
 } else {
   telegramStatus = 'skipped_unconfigured';
 }
 let sheetsStatus = 'skipped_unconfigured';
-if (sheetsPlan.sheets_action === 'send') {
+const sheetsRan = Object.keys(upserted).length > 0;
+if (sheetsRan) {
   sheetsStatus = upserted.error ? 'failed' : 'exported';
 }
 const pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;
@@ -264,8 +296,8 @@ return [{ json: {
   ai_prequalify: pre,
   channels: {
     telegram_sales_alert: telegramStatus,
-    whatsapp: 'awaiting_human_approval',
-    email: 'awaiting_human_approval',
+    whatsapp: 'skipped',
+    email: 'skipped',
     google_sheets: sheetsStatus
   },
   errors: []
@@ -278,8 +310,19 @@ const lead = $input.first().json;
 const pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;
 const sheetsPlan = safe('Plan Sheets Export');
 const upserted = safe('Append or update row in sheet');
+const plan = safe('Plan Telegram Sales Alert');
+const sent = safe('Send a text message');
+let telegramStatus = 'skipped_unconfigured';
+if (plan.telegram_action === 'send') {
+  telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';
+} else if (plan.telegram_reason === 'cold_skipped') {
+  telegramStatus = 'skipped_cold';
+} else {
+  telegramStatus = 'skipped_unconfigured';
+}
 let sheetsStatus = 'skipped_unconfigured';
-if (sheetsPlan.sheets_action === 'send') {
+const sheetsRan = Object.keys(upserted).length > 0;
+if (sheetsRan) {
   sheetsStatus = upserted.error ? 'failed' : 'exported';
 }
 return [{ json: {
@@ -295,7 +338,7 @@ return [{ json: {
   human_approval_required: false,
   ai_prequalify: pre,
   channels: {
-    telegram_sales_alert: 'not_applicable',
+    telegram_sales_alert: telegramStatus,
     whatsapp: 'skipped_not_hot',
     email: 'skipped_not_hot',
     google_sheets: sheetsStatus
@@ -313,64 +356,25 @@ return [{ json: {
   lead_id: lead.id,
   follow_up_status: lead.follow_up_status,
   errors: ['Follow-up cannot be sent until a draft exists and a human approves it'],
-  channels: { telegram_sales_alert: 'not_applicable', whatsapp: 'not_sent', email: 'not_sent' }
-} }];
-""".strip()
-
-JS_PLAN_ADAPTERS = r"""
-const approved = $input.first().json;
-const lead = $('Load Lead For Approval').first().json;
-const waPhone = $env.WHATSAPP_PHONE_NUMBER_ID;
-const waTo = $env.WHATSAPP_TO;
-const resend = $env.RESEND_API_KEY;
-const emailFrom = $env.EMAIL_FROM;
-const emailTo = lead.email;
-const draft = lead.draft_message || '';
-const waEnabled = Boolean(waPhone && waTo);
-const emailEnabled = Boolean(resend && emailFrom && emailTo);
-return [{ json: {
-  approved,
-  lead_id: lead.id,
-  draft,
-  whatsapp_action: waEnabled ? 'send' : 'skip',
-  whatsapp_reason: waEnabled ? 'configured' : 'WhatsApp adapter unconfigured (n8n WhatsApp credential + WHATSAPP_PHONE_NUMBER_ID + WHATSAPP_TO)',
-  whatsapp_phone_number_id: waPhone || '',
-  whatsapp_to: waTo || '',
-  email_action: emailEnabled ? 'send' : 'skip',
-  email_reason: emailEnabled ? 'configured' : 'Email adapter unconfigured (RESEND_API_KEY, EMAIL_FROM)',
-  email_request: emailEnabled ? {
-    from: emailFrom,
-    to: [emailTo],
-    subject: 'Follow-up regarding ' + lead.company,
-    text: draft
-  } : null
+  channels: { telegram_sales_alert: 'not_applicable', telegram_followup: 'not_sent', email: 'not_sent' }
 } }];
 """.strip()
 
 JS_ASSEMBLE_APPROVE = r"""
-function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }
-const plan = $('Plan Optional Delivery Adapters').first().json;
-const wa = safe('Send message');
-const em = safe('Send Email via Resend (optional)');
-let waStatus = plan.whatsapp_action === 'send' ? ((wa.messages || wa.ok || wa.id) ? 'sent' : 'failed') : 'skipped_unconfigured';
-let emStatus = plan.email_action === 'send' ? ((em.id || em.ok) ? 'sent' : 'failed') : 'skipped_unconfigured';
-if (plan.whatsapp_action === 'send' && wa.error) waStatus = 'failed';
-if (plan.email_action === 'send' && em.error) emStatus = 'failed';
+const approved = $input.first().json;
 return [{ json: {
   outcome: 'approved',
-  lead_id: plan.lead_id,
-  crm_send_result: plan.approved.send_result || null,
-  follow_up_status: plan.approved.follow_up_status,
+  lead_id: approved.lead_id,
+  crm_send_result: approved.send_result || null,
+  follow_up_status: approved.follow_up_status,
   channels: {
-    backend_mock_send: plan.approved.send_result || 'unknown',
-    whatsapp: waStatus,
-    email: emStatus,
-    telegram_sales_alert: 'not_applicable',
+    backend_mock_send: approved.send_result || 'unknown',
+    telegram_followup: 'posted_by_backend',
     google_sheets: 'not_applicable'
   },
   notes: [
-    'Customer-facing WhatsApp/email run only after explicit human approval.',
-    'Unconfigured adapters are skipped, not marked successful.'
+    'Human approval is done in the CRM dashboard.',
+    'The approved or rejected draft is posted to Telegram by the backend bot.'
   ],
   errors: []
 } }];
@@ -577,7 +581,7 @@ def telegram_send(i, name, x, y):
         {
             "chatId": "={{ $json.telegram_chat_id }}",
             "text": "={{ $json.telegram_text }}",
-            "additionalFields": {"appendAttribution": False},
+            "additionalFields": {"appendAttribution": False, "parse_mode": "HTML"},
         },
         {
             "webhookId": "9cabb5ed-5a9f-414c-bda8-54e977e5c6b8",
@@ -586,32 +590,7 @@ def telegram_send(i, name, x, y):
             "maxTries": 3,
             "waitBetweenTries": 1500,
             "onError": "continueRegularOutput",
-        },
-    )
-
-
-def whatsapp_send(i, name, x, y):
-    return node(
-        i,
-        name,
-        "n8n-nodes-base.whatsApp",
-        1.1,
-        x,
-        y,
-        {
-            "operation": "send",
-            "phoneNumberId": "={{ $json.whatsapp_phone_number_id }}",
-            "recipientPhoneNumber": "={{ $json.whatsapp_to }}",
-            "textBody": "={{ $json.draft }}",
-            "additionalFields": {},
-        },
-        {
-            "webhookId": "a001fd79-a969-489c-8660-c88e2b81c466",
-            "credentials": WHATSAPP_CRED,
-            "retryOnFail": True,
-            "maxTries": 3,
-            "waitBetweenTries": 1500,
-            "onError": "continueRegularOutput",
+            "alwaysOutputData": True,
         },
     )
 
@@ -620,7 +599,7 @@ def _sheet_document_id():
     return {
         "__rl": True,
         "mode": "id",
-        "value": "={{ $('Plan Sheets Export').item.json.sheets_spreadsheet_id }}",
+        "value": "={{ $env.GOOGLE_SHEETS_SPREADSHEET_ID }}",
     }
 
 
@@ -667,12 +646,48 @@ def sheets_create(i, name, x, y):
             "resource": "sheet",
             "operation": "create",
             "documentId": _sheet_document_id(),
-            "title": "={{ $('Plan Sheets Export').item.json.sheets_worksheet }}",
+            "title": "={{ $env.GOOGLE_SHEETS_WORKSHEET || 'Qualified Leads' }}",
             "options": {},
         },
         {
             "credentials": SHEETS_CRED,
             "onError": "continueRegularOutput",
+        },
+    )
+
+
+def sheets_ensure_headers(i, name, x, y):
+    """Write CRM header row so appendOrUpdate schema matches the live tab."""
+    header_row = json.dumps({"values": [SHEET_FIELDS], "majorDimension": "ROWS"})
+    return node(
+        i,
+        name,
+        "n8n-nodes-base.httpRequest",
+        4.2,
+        x,
+        y,
+        {
+            "method": "PUT",
+            "url": (
+                "={{ 'https://sheets.googleapis.com/v4/spreadsheets/' + "
+                "$env.GOOGLE_SHEETS_SPREADSHEET_ID + '/values/' + "
+                "encodeURIComponent(($env.GOOGLE_SHEETS_WORKSHEET || 'Qualified Leads') + '!A1:M1') + "
+                "'?valueInputOption=USER_ENTERED' }}"
+            ),
+            "authentication": "predefinedCredentialType",
+            "nodeCredentialType": "googleSheetsOAuth2Api",
+            "sendBody": True,
+            "specifyBody": "json",
+            "jsonBody": header_row,
+            "options": {"timeout": 15000},
+        },
+        {
+            "credentials": SHEETS_CRED,
+            "retryOnFail": True,
+            "maxTries": 2,
+            "waitBetweenTries": 1000,
+            "onError": "continueRegularOutput",
+            "alwaysOutputData": True,
         },
     )
 
@@ -693,7 +708,7 @@ def sheets_append_or_update(i, name, x, y):
             "sheetName": {
                 "__rl": True,
                 "mode": "name",
-                "value": "={{ $('Plan Sheets Export').item.json.sheets_worksheet }}",
+                "value": "={{ $env.GOOGLE_SHEETS_WORKSHEET || 'Qualified Leads' }}",
             },
             "columns": _sheet_columns(),
             "options": {},
@@ -704,6 +719,7 @@ def sheets_append_or_update(i, name, x, y):
             "maxTries": 2,
             "waitBetweenTries": 1500,
             "onError": "continueRegularOutput",
+            "alwaysOutputData": True,
         },
     )
 
@@ -722,10 +738,10 @@ def build():
         sticky(2, "Group: Enrichment", "## 2. Optional enrichment\nLocal domain/seniority only. No fake Clearbit success.", 420, 40, 380, 160, 6),
         sticky(3, "Group: AI qualification", "## 3. AI qualification\nOfficial AI Agent + Groq Chat Model (`openai/gpt-oss-20b`).\nSkipped honestly when `GROQ_API_KEY` / credential is missing.", 860, 0, 820, 180, 6),
         sticky(4, "Group: CRM", "## 4. CRM orchestration\nBackend is source of truth for persist, qualify, priority.\nHTTP Request stays here (no official FastAPI node).", 1760, 40, 560, 180, 4),
-        sticky(8, "Group: Sheets", "## 4b. Google Sheets export\nOfficial **Create sheet** then **Append or update row** by CRM `id`.\nEmpty `GOOGLE_SHEETS_SPREADSHEET_ID` skips; tab-exists errors continue.", 3360, 0, 1280, 180, 4),
-        sticky(5, "Group: Routing HITL", "## 5. Routing & HITL\nHot: draft only. Official Telegram node for sales alert.\nCustomer WhatsApp waits for `/webhook/lead-approve`.", 4700, 0, 620, 180, 3),
+        sticky(8, "Group: Sheets", "## 4b. Google Sheets export\nWrite CRM header row then upsert by id. Tab CRM_AI must already exist.\nEmpty `GOOGLE_SHEETS_SPREADSHEET_ID` skips.", 3360, 0, 1280, 180, 4),
+        sticky(5, "Group: Routing HITL", "## 5. Routing & HITL\nHot and warm: Telegram sales alert.\nHot only: follow-up draft. Approve/reject in the dashboard; bot posts the decision.", 4700, 0, 720, 180, 3),
         sticky(6, "Group: Error review", "## Error / review\nInvalid payload, CRM errors, and failed `/qualify` stay on this row.", 240, 620, 640, 140, 1),
-        sticky(7, "Group: Approve webhook", "## Human approval webhook\nPOST /webhook/lead-approve `{lead_id}` after a draft exists.\nOfficial WhatsApp node; Resend stays HTTP (no first-party node).", 0, 980, 780, 180, 2),
+        sticky(7, "Group: Approve webhook", "## Human approval\nPrefer the dashboard HITL queue.\nOptional: POST /webhook/lead-approve `{lead_id}` — CRM then Telegram, no WhatsApp.", 0, 980, 780, 180, 2),
         webhook(10, "Lead Intake Webhook", "lead-intake", 0, 320, "lead-intake"),
         code(11, "Validate Incoming Lead", JS_VALIDATE, 240, 320),
         iff(12, "Payload Valid?", "={{ $json.valid }}", None, 480, 320, op="true"),
@@ -762,7 +778,7 @@ def build():
             32,
             "Backend Qualify Lead",
             "POST",
-            "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id + '/qualify' }}",
+            "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id + '/qualify?notify=false' }}",
             2840,
             320,
             extra_opts={
@@ -784,8 +800,8 @@ def build():
             320,
         ),
         code(63, "Plan Sheets Export", JS_PLAN_SHEETS, 3720, 320),
-        iff(64, "Sheets Configured?", "={{ $json.sheets_action }}", "send", 3940, 320),
-        sheets_create(65, "Create sheet", 4160, 160),
+        iff(64, "Sheets Configured?", "={{ $env.GOOGLE_SHEETS_SPREADSHEET_ID }}", None, 3940, 320, op="notEmpty"),
+        sheets_ensure_headers(68, "Ensure sheet headers", 4160, 160),
         sheets_append_or_update(66, "Append or update row in sheet", 4380, 160),
         code(67, "Resume CRM Lead", JS_RESUME_LEAD, 4600, 320),
         iff(38, "Priority Is Hot?", "={{ $json.priority }}", "hot", 4820, 320),
@@ -799,13 +815,15 @@ def build():
             extra_opts={"timeout": 45000},
             retry=True,
         ),
-        code(40, "Plan Telegram Sales Alert", JS_TELEGRAM_PLAN, 5260, 160),
-        iff(41, "Send Telegram Alert?", "={{ $json.telegram_action }}", "send", 5480, 160),
-        telegram_send(42, "Send a text message", 5700, 80),
-        code(43, "Assemble Hot Result", JS_ASSEMBLE_HOT, 5940, 160),
-        respond(44, "Respond — Hot Processed", 6180, 160),
-        code(45, "Assemble Non-Hot Result", JS_ASSEMBLE_OTHER, 5040, 480),
-        respond(46, "Respond — Routed", 5280, 480),
+        code(40, "Plan Telegram Sales Alert", JS_TELEGRAM_PLAN, 5260, 320),
+        iff(41, "Send Telegram Alert?", "={{ $json.telegram_action }}", "send", 5480, 320),
+        telegram_send(42, "Send a text message", 5700, 160),
+        code(69, "Resume CRM Lead After Telegram", JS_RESUME_LEAD, 5920, 320),
+        iff(70, "Assemble Hot Path?", "={{ $json.priority }}", "hot", 6140, 320),
+        code(43, "Assemble Hot Result", JS_ASSEMBLE_HOT, 6360, 160),
+        respond(44, "Respond — Hot Processed", 6600, 160),
+        code(45, "Assemble Non-Hot Result", JS_ASSEMBLE_OTHER, 6360, 480),
+        respond(46, "Respond — Routed", 6600, 480),
         webhook(50, "Human Approve Webhook", "lead-approve", 0, 1200, "lead-approve"),
         http(
             51,
@@ -826,27 +844,8 @@ def build():
             720,
             1200,
         ),
-        code(56, "Plan Optional Delivery Adapters", JS_PLAN_ADAPTERS, 960, 1200),
-        iff(57, "WhatsApp Adapter Enabled?", "={{ $json.whatsapp_action }}", "send", 1200, 1100),
-        whatsapp_send(58, "Send message", 1440, 1000),
-        iff(59, "Email Adapter Enabled?", "={{ $('Plan Optional Delivery Adapters').item.json.email_action }}", "send", 1200, 1320),
-        http(
-            60,
-            "Send Email via Resend (optional)",
-            "POST",
-            "https://api.resend.com/emails",
-            1440,
-            1440,
-            headers=[
-                ("Authorization", "Bearer {{$env.RESEND_API_KEY}}"),
-                ("Content-Type", "application/json"),
-            ],
-            json_body="={{ $('Plan Optional Delivery Adapters').item.json.email_request }}",
-            extra_opts={"timeout": 15000},
-            retry=True,
-        ),
-        code(61, "Assemble Approval Result", JS_ASSEMBLE_APPROVE, 1680, 1200),
-        respond(62, "Respond — Approval Complete", 1920, 1200),
+        code(61, "Assemble Approval Result", JS_ASSEMBLE_APPROVE, 960, 1200),
+        respond(62, "Respond — Approval Complete", 1200, 1200),
     ]
 
     connections = {}
@@ -877,18 +876,21 @@ def build():
         ("Qualification Failed Review", "Respond — Qualification Review"),
         ("Get CRM Lead", "Plan Sheets Export"),
         ("Plan Sheets Export", "Sheets Configured?"),
-        ("Sheets Configured?", "Create sheet", 0),
+        ("Sheets Configured?", "Ensure sheet headers", 0),
         ("Sheets Configured?", "Resume CRM Lead", 1),
-        ("Create sheet", "Append or update row in sheet"),
+        ("Ensure sheet headers", "Append or update row in sheet"),
         ("Append or update row in sheet", "Resume CRM Lead"),
         ("Resume CRM Lead", "Priority Is Hot?"),
         ("Priority Is Hot?", "Draft Follow-up (HITL)", 0),
-        ("Priority Is Hot?", "Assemble Non-Hot Result", 1),
+        ("Priority Is Hot?", "Plan Telegram Sales Alert", 1),
         ("Draft Follow-up (HITL)", "Plan Telegram Sales Alert"),
         ("Plan Telegram Sales Alert", "Send Telegram Alert?"),
         ("Send Telegram Alert?", "Send a text message", 0),
-        ("Send Telegram Alert?", "Assemble Hot Result", 1),
-        ("Send a text message", "Assemble Hot Result"),
+        ("Send Telegram Alert?", "Resume CRM Lead After Telegram", 1),
+        ("Send a text message", "Resume CRM Lead After Telegram"),
+        ("Resume CRM Lead After Telegram", "Assemble Hot Path?"),
+        ("Assemble Hot Path?", "Assemble Hot Result", 0),
+        ("Assemble Hot Path?", "Assemble Non-Hot Result", 1),
         ("Assemble Hot Result", "Respond — Hot Processed"),
         ("Assemble Non-Hot Result", "Respond — Routed"),
         ("Human Approve Webhook", "Load Lead For Approval"),
@@ -896,14 +898,7 @@ def build():
         ("Draft Ready For Send?", "Approve Follow-up in CRM", 0),
         ("Draft Ready For Send?", "Respond Body — Approval Blocked", 1),
         ("Respond Body — Approval Blocked", "Respond — Approval Blocked"),
-        ("Approve Follow-up in CRM", "Plan Optional Delivery Adapters"),
-        ("Plan Optional Delivery Adapters", "WhatsApp Adapter Enabled?"),
-        ("WhatsApp Adapter Enabled?", "Send message", 0),
-        ("WhatsApp Adapter Enabled?", "Email Adapter Enabled?", 1),
-        ("Send message", "Email Adapter Enabled?"),
-        ("Email Adapter Enabled?", "Send Email via Resend (optional)", 0),
-        ("Email Adapter Enabled?", "Assemble Approval Result", 1),
-        ("Send Email via Resend (optional)", "Assemble Approval Result"),
+        ("Approve Follow-up in CRM", "Assemble Approval Result"),
         ("Assemble Approval Result", "Respond — Approval Complete"),
     ]
     for edge in edges:

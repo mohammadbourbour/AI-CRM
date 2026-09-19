@@ -4,19 +4,16 @@ n8n **orchestrates**. The FastAPI backend remains the source of truth for CRM pe
 
 This workflow is truthful: missing API keys are skipped, not faked as successful sends.
 
-## What it demonstrates
+## What it does
 
 - Webhook intake (`/webhook/lead-intake`)
 - Payload validation before CRM
-- Optional local lead enrichment (domain / seniority — no fake enrichment API)
-- Official **AI Agent** + **Groq Chat Model** (`openai/gpt-oss-20b`) for structured pre-qualification
-- JSON parse + schema checks before CRM writes
-- Official **Telegram** node for the optional sales alert
-- Official **WhatsApp Business Cloud** node after human approval
-- Official **Google Sheets** nodes (`Create sheet` + `Append or update row`) after qualify
-- Human-approval webhook before customer-facing WhatsApp / email
-- HTTP Request only for FastAPI CRM and Resend (no first-party Resend node)
-- Backend CRM create + qualify
+- Local enrichment (domain / seniority)
+- Official **AI Agent** + **Groq Chat Model** (`openai/gpt-oss-20b`)
+- Official **Telegram** node for hot and warm sales alerts
+- Official **Google Sheets** nodes after qualify
+- HTTP Request for FastAPI CRM
+- Human approval in the CRM dashboard; Telegram posts the decision from the backend
 - Dedicated review responses when validation or `/qualify` fails
 - Priority routing (hot vs not)
 
@@ -28,39 +25,27 @@ This workflow is truthful: missing API keys are skipped, not faked as successful
 4. `AI Agent` (Groq Chat Model) if `GROQ_API_KEY` is set **and** a Groq credential is attached, else skip
 5. `Parse & Validate LLM JSON` — n8n pre-qualification is **audit only**; backend still qualifies
 6. `Create Lead in CRM` → `POST /api/webhooks/leads` with `X-Webhook-Secret`
-7. `Backend Qualify Lead` → `POST /api/leads/{id}/qualify` (retries, then review path on failure)
+7. `Backend Qualify Lead` → `POST /api/leads/{id}/qualify?notify=false`
 8. `Get CRM Lead`
-9. Official Google Sheets: `Plan Sheets Export` → `Create sheet` (continue if the tab already exists) → `Append or update row in sheet` matched on CRM `id`. Skipped when `GOOGLE_SHEETS_SPREADSHEET_ID` is empty
-10. `Resume CRM Lead` so `$json.priority` is the CRM record again
-11. If `priority == hot` → `Draft Follow-up (HITL)` then optional Telegram sales alert
-12. Respond with `outcome`, routing, and channel statuses (`sent` | `exported` | `skipped_unconfigured` | `awaiting_human_approval` | `not_applicable`)
+9. Official Google Sheets: headers + upsert by CRM `id`. Skipped when `GOOGLE_SHEETS_SPREADSHEET_ID` is empty
+10. If `priority == hot` → `Draft Follow-up (HITL)`
+11. Telegram sales alert for hot and warm
+12. Respond with `outcome`, routing, and channel statuses
 
-Warm/cold leads are not auto-drafted. Customer WhatsApp/email are **not** sent on intake.
+Warm/cold leads are not auto-drafted. Follow-up copy is not sent to a customer on intake.
 
-## Human approval (separate webhook)
+## Human approval
 
-After a hot lead has `follow_up_status=awaiting_approval`:
+Approve or reject in the dashboard **Approval queue**. The backend updates CRM and posts the decision to Telegram.
 
-```
-POST /webhook/lead-approve
-{ "lead_id": 1 }
-```
+## Telegram
 
-The workflow:
+| Channel | When |
+|---------|------|
+| n8n sales alert | After qualify, hot or warm, when `TELEGRAM_CHAT_ID` is set |
+| Backend follow-up | After dashboard approve or reject |
 
-1. Loads the CRM lead
-2. Blocks unless `follow_up_status == awaiting_approval`
-3. Calls `POST /api/leads/{id}/approve-followup` (backend mock send — CRM state)
-4. Official WhatsApp node — only if the WhatsApp credential is attached and `WHATSAPP_PHONE_NUMBER_ID` + `WHATSAPP_TO` are set
-5. Email adapter (HTTP Resend) — only if `RESEND_API_KEY` and `EMAIL_FROM` are set
-6. Unconfigured adapters return `skipped_unconfigured`, never `sent`
-
-## Telegram: two optional paths (do not double-enable casually)
-
-| Channel | When | Default |
-|---------|------|---------|
-| Backend Telegram | Inside `POST /api/leads/{id}/qualify` when priority is hot and backend Telegram env is set | Off if tokens empty |
-| n8n sales alert | After hot draft, only if `N8N_TELEGRAM_ALERTS=true` **and** n8n has Telegram env | **Off** (`false`) |
+Qualify is called with `notify=false` so the backend does not double-post the qualification alert.
 
 Customer follow-up text is never auto-sent.
 
@@ -71,12 +56,9 @@ Customer follow-up text is never auto-sent.
 3. **Workflows → Import from File** → `n8n/workflows/lead-qualification.json`.
 4. Map credentials on the official nodes:
    - **Groq Chat Model** → Groq account (API key from [console.groq.com](https://console.groq.com/keys))
-   - **Send a text message** → Telegram account (already wired to `Telegram account` if that credential exists)
-   - **Send message** → WhatsApp account
-   - **Create sheet** and **Append or update row in sheet** → Google Sheets OAuth2 (Client ID/Secret come from `.env`; only **Sign in with Google** is needed)
-5. **Publish / activate** the workflow. Until you Publish, the dashboard `via=n8n` path returns 503 (`webhook is not registered`).
-
-Morning interview steps (Persian): [../docs/MORNING_RUN_FA.md](../docs/MORNING_RUN_FA.md)
+   - **Send a text message** → Telegram account
+   - **Ensure sheet headers** and **Append or update row in sheet** → Google Sheets OAuth2
+5. **Publish / activate** the workflow. Until you Publish, dashboard runs return 503 (`webhook is not registered`).
 
 Optional helper (imports the JSON, does **not** Publish):
 
@@ -99,11 +81,8 @@ Passed through `docker-compose.yml`:
 | `BACKEND_BASE_URL` | `http://backend:8000` on Docker |
 | `WEBHOOK_SECRET` | Must match backend |
 | `GROQ_API_KEY` / `GROQ_MODEL` | Gate + default model for the Groq Chat Model sub-node. Also create a **Groq** credential in n8n. |
-| `N8N_TELEGRAM_ALERTS` | Set `true` to allow n8n Telegram sales alerts |
 | `TELEGRAM_CHAT_ID` | Chat id for the official Telegram node (bot token lives in the Telegram credential) |
-| `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_TO` | Recipient routing for the official WhatsApp node (access token lives in the WhatsApp credential) |
-| `RESEND_API_KEY` / `EMAIL_FROM` | Optional email send after approval (HTTP — Resend has no official n8n node) |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | Spreadsheet for the official Sheets nodes. Empty → skip export |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | Spreadsheet ID. Empty → skip |
 | `GOOGLE_SHEETS_WORKSHEET` | Tab name (default `Qualified Leads`). Create sheet makes it if missing |
 | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Injected into n8n as `CREDENTIALS_OVERWRITE_DATA` so you do not paste OAuth secrets in the UI |
 
@@ -119,7 +98,6 @@ n8n upserts one qualified lead per intake (match on `id`). The backend `POST /ap
 
 ```
 POST http://localhost:5678/webhook/lead-intake
-POST http://localhost:5678/webhook/lead-approve
 ```
 
 If host port 5678 is taken, use 5679.

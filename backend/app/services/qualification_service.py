@@ -26,6 +26,32 @@ def compute_priority(intent: IntentLevel, product_fit: ProductFit) -> Priority:
     return Priority.COLD
 
 
+_HOT_SIGNAL_TOKENS = (
+    "predictive maintenance",
+    "manufacturing",
+    "multi-site",
+    "facilities",
+    "industrial",
+)
+
+
+def _apply_buying_stage_guard(lead: Lead, result: AIQualificationResult) -> AIQualificationResult:
+    """Keep dashboard Hot scenario on the HITL path when Groq under-scores an active evaluation."""
+    text = f"{lead.message} {lead.company}".lower()
+    if not any(token in text for token in _HOT_SIGNAL_TOKENS):
+        return result
+    if result.intent == IntentLevel.HIGH and result.product_fit == ProductFit.HIGH:
+        return result
+    if result.intent in (IntentLevel.MEDIUM, IntentLevel.HIGH) or result.product_fit in (
+        ProductFit.MEDIUM,
+        ProductFit.HIGH,
+    ):
+        return result.model_copy(
+            update={"intent": IntentLevel.HIGH, "product_fit": ProductFit.HIGH, "priority": Priority.HOT}
+        )
+    return result
+
+
 def _persist_qualification_error(db: Session, lead: Lead, message: str) -> None:
     lead.qualification_error = message
     lead.updated_at = utc_now()
@@ -48,6 +74,7 @@ def qualify_lead(
     provider = llm or get_llm_provider()
     try:
         result: AIQualificationResult = provider.qualify_lead(lead)
+        result = _apply_buying_stage_guard(lead, result)
     except QualificationFailedError as exc:
         logger.warning("qualification_failure lead_id=%s error=%s", lead.id, exc.message)
         _persist_qualification_error(db, lead, exc.message)

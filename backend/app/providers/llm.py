@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Protocol
+import re
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -43,14 +44,76 @@ _JSON_SCHEMA_PREFIXES = (
     "o1",
     "o3",
     "o4-mini",
+    "openai/gpt-oss",
+    "gpt-oss",
 )
 
 SYSTEM_PROMPT = (
     "You are a B2B sales qualification assistant. "
-    "Return JSON that matches the lead qualification schema. "
+    "Return JSON only. Use these lowercase enums exactly: "
+    "intent must be one of low, medium, high; "
+    "product_fit must be one of unknown, low, medium, high; "
+    "priority must be one of cold, warm, hot. "
+    "Do not use labels like Evaluation, High, or Medium. "
+    "pain_points must be an array of strings. "
+    "Scoring: intent=high when the buyer is evaluating, running a POC, or buying a specific solution. "
+    "product_fit=high when the use case matches industrial/ops/AI analytics, predictive maintenance, "
+    "or multi-site facilities. If BOTH are high, set priority=hot. "
     "Do not invent contact details. Do not propose URLs or tool calls. "
-    "priority is a hint only; the backend recomputes it."
+    "priority is a hint only; the backend recomputes it and only hot when intent=high AND product_fit=high."
 )
+
+_INTENT_ALIASES = {
+    "high": "high",
+    "strong": "high",
+    "hot": "high",
+    "buying": "high",
+    "ready": "high",
+    "urgent": "high",
+    "evaluation": "high",
+    "evaluating": "high",
+    "poc": "high",
+    "rfp": "high",
+    "shortlist": "high",
+    "medium": "medium",
+    "moderate": "medium",
+    "warm": "medium",
+    "exploring": "medium",
+    "considering": "medium",
+    "interested": "medium",
+    "low": "low",
+    "weak": "low",
+    "cold": "low",
+    "none": "low",
+    "unknown": "low",
+}
+
+_FIT_ALIASES = {
+    "high": "high",
+    "strong": "high",
+    "excellent": "high",
+    "good": "high",
+    "medium": "medium",
+    "moderate": "medium",
+    "fair": "medium",
+    "partial": "medium",
+    "low": "low",
+    "weak": "low",
+    "poor": "low",
+    "unknown": "unknown",
+    "n/a": "unknown",
+    "na": "unknown",
+    "none": "unknown",
+}
+
+_PRIORITY_ALIASES = {
+    "hot": "hot",
+    "high": "hot",
+    "warm": "warm",
+    "medium": "warm",
+    "cold": "cold",
+    "low": "cold",
+}
 
 
 def model_supports_json_schema(model: str) -> bool:
@@ -58,9 +121,53 @@ def model_supports_json_schema(model: str) -> bool:
     return any(name.startswith(prefix) for prefix in _JSON_SCHEMA_PREFIXES)
 
 
+def _extract_json_object(raw: str) -> dict[str, Any]:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*```$", "", text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+        if not match:
+            raise
+        data = json.loads(match.group(0))
+    if not isinstance(data, dict):
+        raise json.JSONDecodeError("qualification payload must be an object", text, 0)
+    return data
+
+
+def _normalize_enum(value: Any, aliases: dict[str, str], field: str) -> Any:
+    if value is None or isinstance(value, (IntentLevel, ProductFit, Priority)):
+        return value
+    token = str(value).strip().lower().replace("_", " ").replace("-", " ")
+    token = token.split()[0] if token else token
+    mapped = aliases.get(token)
+    if mapped is None:
+        logger.info("Leaving unmapped %s value=%r", field, value)
+        return value
+    return mapped
+
+
+def _normalize_qualification_payload(data: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(data)
+    payload["intent"] = _normalize_enum(payload.get("intent"), _INTENT_ALIASES, "intent")
+    payload["product_fit"] = _normalize_enum(
+        payload.get("product_fit"), _FIT_ALIASES, "product_fit"
+    )
+    payload["priority"] = _normalize_enum(
+        payload.get("priority"), _PRIORITY_ALIASES, "priority"
+    )
+    pain = payload.get("pain_points")
+    if isinstance(pain, str) and pain.strip():
+        payload["pain_points"] = [pain.strip()]
+    return payload
+
+
 def parse_qualification(raw: str) -> AIQualificationResult:
-    data = json.loads(raw)
-    return AIQualificationResult.model_validate(data)
+    data = _extract_json_object(raw)
+    return AIQualificationResult.model_validate(_normalize_qualification_payload(data))
 
 
 class LLMProvider(Protocol):
@@ -160,13 +267,33 @@ class GroqProvider:
             "temperature": 0 if json_object else 0.3,
         }
         if json_object:
-            kwargs["response_format"] = {"type": "json_object"}
+            if model_supports_json_schema(self._model):
+                kwargs["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "lead_qualification",
+                        "strict": True,
+                        "schema": QUALIFICATION_JSON_SCHEMA,
+                    },
+                }
+            else:
+                kwargs["response_format"] = {"type": "json_object"}
         try:
             response = self._client.chat.completions.create(**kwargs)
         except APITimeoutError as exc:
             raise QualificationFailedError("LLM request timed out") from exc
         except APIError as exc:
-            raise QualificationFailedError(f"LLM provider error: {exc}") from exc
+            if json_object and kwargs.get("response_format", {}).get("type") == "json_schema":
+                logger.warning("json_schema unsupported; falling back to json_object: %s", exc)
+                kwargs["response_format"] = {"type": "json_object"}
+                try:
+                    response = self._client.chat.completions.create(**kwargs)
+                except APITimeoutError as timeout_exc:
+                    raise QualificationFailedError("LLM request timed out") from timeout_exc
+                except APIError as retry_exc:
+                    raise QualificationFailedError(f"LLM provider error: {retry_exc}") from retry_exc
+            else:
+                raise QualificationFailedError(f"LLM provider error: {exc}") from exc
         content = response.choices[0].message.content
         if not content:
             raise QualificationFailedError("LLM returned an empty response")

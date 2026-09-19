@@ -1,24 +1,22 @@
 # Design decisions
 
-Portfolio implementation demonstrating an AI-assisted sales and CRM automation workflow. Not a production CRM.
-
 ## Mock providers by default
 
 `GROQ_API_KEY` empty → `MockLLMProvider` (keyword heuristics). Logs state this is not production inference.
 
 Telegram credentials empty → notify is disabled. The app does not crash and does not pretend a message was delivered.
 
-After a successful `/qualify`, the backend posts the **qualification result** (all priorities) to `TELEGRAM_CHAT_ID`. That chat can be a user, group, or channel if the bot is an admin. This is a sales-team result, not a customer message. Empty credentials → `skipped_unconfigured`.
+After a successful `/qualify` with `notify=true`, the backend posts the qualification result for hot and warm leads. n8n intake uses `notify=false` and sends the sales alert from the Telegram node instead.
 
-## Backend Telegram on qualify
+## Backend Telegram on follow-up
 
-Telegram for hot leads is still invoked from `POST /api/leads/{id}/qualify` after deterministic priority is `hot` (backend unchanged). n8n intake does not send customer messages. n8n Telegram sales alerts are opt-in via `N8N_TELEGRAM_ALERTS`.
+Approve and reject post the draft and decision to Telegram from FastAPI. Qualification alerts on the n8n path come from n8n, not from `/qualify`.
 
 ## Webhook shared-secret (minimal security)
 
 `POST /api/webhooks/leads` requires `X-Webhook-Secret` matching `WEBHOOK_SECRET`. Missing or wrong values return 401.
 
-This is a **deliberate minimal-security trade-off**: it stops anonymous lead injection on a local demo port. It is **not** production-grade auth (no rotation, no per-client credentials, no signatures, no mTLS). Direct `POST /api/leads` is intentionally left open for local API exploration.
+This is a **minimal** shared-secret check for `POST /api/webhooks/leads`. Missing or wrong values return 401. Direct `POST /api/leads` is unauthenticated and should not be exposed on a public network without additional controls.
 
 ## Insert-first idempotency
 
@@ -30,36 +28,31 @@ Failed `/qualify` sets `qualification_error` and leaves `status` unchanged (typi
 
 ## Strict structured output plus one retry
 
-Groq uses OpenAI-compatible Chat Completions with `response_format=json_object` (default model `llama-3.1-8b-instant`). Pydantic validation always runs. On validation failure the provider retries once with the error text in the prompt, then fails closed with 503.
+Groq uses OpenAI-compatible Chat Completions with structured JSON (`openai/gpt-oss-20b` by default). Pydantic validation always runs. On validation failure the provider retries once with the error text in the prompt, then fails closed with 503.
 
-## n8n optional channels
+## n8n channels
 
-n8n can optionally call official Telegram, WhatsApp, and Google Sheets nodes, or Resend over HTTP, after explicit configuration. Empty credentials skip the adapter and return `skipped_unconfigured`. The workflow does not mark those sends or exports as successful.
+n8n sends Telegram sales alerts when `TELEGRAM_CHAT_ID` is set, and upserts Google Sheets when `GOOGLE_SHEETS_SPREADSHEET_ID` is set. Empty credentials skip the adapter and return `skipped_unconfigured`.
 
-Default `N8N_TELEGRAM_ALERTS=false` so n8n does not send Telegram unless you opt in. Backend Telegram on `/qualify` is unchanged.
-
-Customer WhatsApp/email run only from the `lead-approve` webhook after a CRM draft exists.
-
-Google Sheets runs on intake after a successful `/qualify`: official **Create sheet** (tab; continues if it already exists) then **Append or update row** matched on CRM `id`. `GOOGLE_SHEETS_SPREADSHEET_ID` empty skips the export. Backend `POST /api/exports/google-sheets` is a complementary full-worksheet snapshot using a service account.
+Google Sheets runs on intake after a successful `/qualify`: header row then **Append or update row** matched on CRM `id`. Backend `POST /api/exports/google-sheets` is a complementary full-worksheet snapshot using a service account.
 
 ## n8n LLM
 
 The n8n pre-qualify step uses the official **AI Agent** + **Groq Chat Model**. `GROQ_API_KEY` gates the branch; a Groq credential in n8n authenticates the node. Parse failures do not invent a qualification record.
 
-HTTP Request remains only for the FastAPI CRM and Resend. There is no official Resend node. Google Sheets uses the official node (typeVersion 4.7), not HTTP.
+HTTP Request remains only for the FastAPI CRM. Google Sheets uses the official node.
 
 ## Human approval before send
 
-AI may write `draft_message`. The backend will not mark follow-up `sent` until `POST /api/leads/{id}/approve-followup` (or the n8n `lead-approve` webhook that calls that endpoint). Human **reject** (`POST /api/leads/{id}/reject-followup`) sets `skipped`, keeps the draft for audit, and does not send. Backend send is a **mock** (`mock_sent`). Real WhatsApp/email happen only if those n8n adapters are configured, after the same approval.
+AI may write `draft_message`. The backend will not mark follow-up `sent` until `POST /api/leads/{id}/approve-followup`. Human **reject** (`POST /api/leads/{id}/reject-followup`) sets `skipped`, keeps the draft for audit, and does not contact the customer. The decision is posted to Telegram. CRM send status is `mock_sent`.
 
-## Documented gaps that stay open
+## Documented gaps
 
-- **No pagination** on `GET /api/leads`. The list is the full table ordered by `created_at` desc. Fine for a demo dataset; not fine for production volume.
-- **Logs mask PII.** Webhook and qualification logs use `mask_email` (`j***@domain.com`). Raw email/phone is not written to those log lines.
+- **No pagination** on `GET /api/leads`.
+- **Logs mask PII.** Webhook and qualification logs use `mask_email` (`j***@domain.com`).
 
 ## Other constraints
 
 - SQLite, single process.
-- Demo dashboard at `GET /` is a presenter UI, not a multi-user product app.
 - Priority is never taken from the LLM as the stored value.
 - LLM output cannot execute tools or fetch arbitrary URLs.

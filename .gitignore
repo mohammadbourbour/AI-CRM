@@ -27,6 +27,13 @@ n8n-check*
 Thumbs.db
 examples/dataset/last_run_summary.json
 
+# Debug / local dumps (never commit)
+data/_n8n*
+scripts/_debug_*
+n8n-backup*.tar.gz
+.cursor/debug-*.log
+debug-*.log
+
 # Google service-account keys (never commit)
 *service-account*.json
 google-credentials.json

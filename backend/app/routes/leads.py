@@ -101,10 +101,14 @@ def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)
 
 
 @router.post("/{lead_id}/qualify", response_model=LeadResponse)
-def qualify_lead(lead_id: int, db: Session = Depends(get_db)) -> LeadResponse:
+def qualify_lead(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    notify: bool = Query(default=True),
+) -> LeadResponse:
     lead = _get_or_404(db, lead_id)
     try:
-        qualified = qualification_service.qualify_lead(db, lead)
+        qualified = qualification_service.qualify_lead(db, lead, notify=notify)
     except QualificationFailedError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

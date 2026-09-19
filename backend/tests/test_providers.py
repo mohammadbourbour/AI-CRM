@@ -19,6 +19,7 @@ def test_missing_groq_uses_mock_provider() -> None:
 
 def test_json_schema_model_detection() -> None:
     assert model_supports_json_schema("gpt-4o-mini") is True
+    assert model_supports_json_schema("openai/gpt-oss-20b") is True
     assert model_supports_json_schema("llama-3.1-8b-instant") is False
 
 
@@ -41,9 +42,15 @@ def test_qualification_result_without_telegram_credentials(client) -> None:  # n
         lead = db.get(Lead, lead_id)
         assert lead is not None
         html = format_qualification_result_html(lead)
-        assert "Lead qualification result" in html
+        assert "Action needed today" in html
         assert "HOT" in html
         assert "&" not in lead.name
+        from app.services.notification_service import format_followup_decision_html
+
+        approved_html = format_followup_decision_html(lead, "approved")
+        assert "Follow-up approved" in approved_html
+        rejected_html = format_followup_decision_html(lead, "rejected")
+        assert "Follow-up rejected" in rejected_html
         assert notify_qualification_result(lead) == "skipped_unconfigured"
         assert notify_hot_lead(lead) is False
     finally:

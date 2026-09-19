@@ -24,7 +24,7 @@ body {
     radial-gradient(1200px 500px at 10% -10%, rgba(46, 201, 160, 0.12), transparent 50%),
     var(--bg);
   color: var(--text);
-  font-family: Vazirmatn, "IBM Plex Sans", Tahoma, sans-serif;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
 }
 
 body {
@@ -51,6 +51,11 @@ body {
 h1 {
   margin: 0 0 8px;
   font-size: 32px;
+}
+
+.control-copy h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
 }
 
 .lede,
@@ -101,25 +106,6 @@ footer {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.via {
-  border: 0;
-  margin: 12px 0 0;
-  padding: 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.via legend {
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-
-.via label {
-  display: block;
-  margin: 4px 0;
 }
 
 .telegram-preview {
@@ -176,6 +162,37 @@ button.ghost {
 .hitl .reject {
   background: var(--hot);
   color: #fff;
+}
+
+.hitl-panel {
+  margin-bottom: 22px;
+}
+
+.hitl-queue {
+  display: grid;
+  gap: 12px;
+}
+
+.hitl-queue.empty {
+  color: var(--muted);
+}
+
+.hitl-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.hitl-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.hitl-card .meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 
 button:disabled {
@@ -245,18 +262,6 @@ button:disabled {
   margin-bottom: 16px;
 }
 
-.grid.three {
-  grid-template-columns: 0.9fr 1fr 1fr;
-}
-
-.talk {
-  margin: 0;
-  padding: 0 18px 0 0;
-  color: var(--muted);
-  line-height: 1.7;
-  font-size: 14px;
-}
-
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -278,9 +283,9 @@ button:disabled {
 }
 
 .timeline li {
-  border-right: 2px solid var(--line);
-  padding: 0 14px 16px 0;
-  margin-right: 8px;
+  border-left: 2px solid var(--line);
+  padding: 0 0 16px 14px;
+  margin-left: 8px;
 }
 
 .timeline .when {

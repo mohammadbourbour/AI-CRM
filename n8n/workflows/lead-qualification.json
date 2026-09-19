@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "content": "## 4b. Google Sheets export\nOfficial **Create sheet** then **Append or update row** by CRM `id`.\nEmpty `GOOGLE_SHEETS_SPREADSHEET_ID` skips; tab-exists errors continue.",
+        "content": "## 4b. Google Sheets export\nWrite CRM header row then upsert by id. Tab CRM_AI must already exist.\nEmpty `GOOGLE_SHEETS_SPREADSHEET_ID` skips.",
         "width": 1280,
         "height": 180,
         "color": 4
@@ -83,8 +83,8 @@
     },
     {
       "parameters": {
-        "content": "## 5. Routing & HITL\nHot: draft only. Official Telegram node for sales alert.\nCustomer WhatsApp waits for `/webhook/lead-approve`.",
-        "width": 620,
+        "content": "## 5. Routing & HITL\nHot and warm: Telegram sales alert.\nHot only: follow-up draft. Approve/reject in the dashboard; bot posts the decision.",
+        "width": 720,
         "height": 180,
         "color": 3
       },
@@ -115,7 +115,7 @@
     },
     {
       "parameters": {
-        "content": "## Human approval webhook\nPOST /webhook/lead-approve `{lead_id}` after a draft exists.\nOfficial WhatsApp node; Resend stays HTTP (no first-party node).",
+        "content": "## Human approval\nPrefer the dashboard HITL queue.\nOptional: POST /webhook/lead-approve `{lead_id}` \u2014 CRM then Telegram, no WhatsApp.",
         "width": 780,
         "height": 180,
         "color": 2
@@ -496,7 +496,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id + '/qualify' }}",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + '/api/leads/' + $json.id + '/qualify?notify=false' }}",
         "options": {
           "timeout": 45000,
           "response": {
@@ -634,12 +634,12 @@
           "conditions": [
             {
               "id": "c-64",
-              "leftValue": "={{ $json.sheets_action }}",
+              "leftValue": "={{ $env.GOOGLE_SHEETS_SPREADSHEET_ID }}",
               "operator": {
                 "type": "string",
-                "operation": "equals"
-              },
-              "rightValue": "send"
+                "operation": "notEmpty",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -657,20 +657,21 @@
     },
     {
       "parameters": {
-        "resource": "sheet",
-        "operation": "create",
-        "documentId": {
-          "__rl": true,
-          "mode": "id",
-          "value": "={{ $('Plan Sheets Export').item.json.sheets_spreadsheet_id }}"
-        },
-        "title": "={{ $('Plan Sheets Export').item.json.sheets_worksheet }}",
-        "options": {}
+        "method": "PUT",
+        "url": "={{ 'https://sheets.googleapis.com/v4/spreadsheets/' + $env.GOOGLE_SHEETS_SPREADSHEET_ID + '/values/' + encodeURIComponent(($env.GOOGLE_SHEETS_WORKSHEET || 'Qualified Leads') + '!A1:M1') + '?valueInputOption=USER_ENTERED' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"values\": [[\"id\", \"external_id\", \"name\", \"email\", \"company\", \"source\", \"priority\", \"status\", \"industry\", \"intent\", \"product_fit\", \"recommended_next_action\", \"created_at\"]], \"majorDimension\": \"ROWS\"}",
+        "options": {
+          "timeout": 15000
+        }
       },
-      "id": "00000000-0000-4000-8000-000000000065",
-      "name": "Create sheet",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
+      "id": "00000000-0000-4000-8000-000000000068",
+      "name": "Ensure sheet headers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         4160,
         160
@@ -681,7 +682,11 @@
           "name": "Google Sheets account"
         }
       },
-      "onError": "continueRegularOutput"
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -690,12 +695,12 @@
         "documentId": {
           "__rl": true,
           "mode": "id",
-          "value": "={{ $('Plan Sheets Export').item.json.sheets_spreadsheet_id }}"
+          "value": "={{ $env.GOOGLE_SHEETS_SPREADSHEET_ID }}"
         },
         "sheetName": {
           "__rl": true,
           "mode": "name",
-          "value": "={{ $('Plan Sheets Export').item.json.sheets_worksheet }}"
+          "value": "={{ $env.GOOGLE_SHEETS_WORKSHEET || 'Qualified Leads' }}"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -858,7 +863,8 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 1500,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -929,7 +935,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const lead = $('Get CRM Lead').first().json;\nconst alerts = String($env.N8N_TELEGRAM_ALERTS || '').toLowerCase() === 'true';\nconst chat = $env.TELEGRAM_CHAT_ID;\nconst enabled = alerts && Boolean(chat);\nconst text = [\n  'HOT lead (n8n sales alert)',\n  'CRM id: ' + lead.id,\n  'Name: ' + lead.name,\n  'Company: ' + lead.company,\n  'Priority: ' + lead.priority,\n  'Summary: ' + (lead.ai_summary || ''),\n  'Next: ' + (lead.recommended_next_action || ''),\n  'Customer follow-up is waiting for human approval. Do not treat this as a sent message.'\n].join('\\n');\nreturn [{ json: {\n  telegram_action: enabled ? 'send' : 'skip',\n  telegram_reason: enabled ? 'configured' : (alerts ? 'missing TELEGRAM_CHAT_ID' : 'N8N_TELEGRAM_ALERTS is not true'),\n  telegram_chat_id: chat || '',\n  telegram_text: text\n} }];"
+        "jsCode": "function esc(v) {\n  return String(v == null || v === '' ? '\u2014' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\nconst stored = $('Get CRM Lead').first().json;\nconst incoming = $input.first().json || {};\nconst lead = { ...stored, ...incoming, id: stored.id, priority: stored.priority || incoming.priority };\nconst chat = String($env.TELEGRAM_CHAT_ID || '').trim();\nconst priority = String(lead.priority || '').toLowerCase();\nconst wantAlert = priority === 'hot' || priority === 'warm';\nconst enabled = Boolean(chat) && wantAlert;\nconst badge = priority === 'hot' ? '\ud83d\udd25 HOT' : (priority === 'warm' ? '\ud83d\udfe0 WARM' : '\ud83d\udd35 COLD');\nconst headline = priority === 'hot'\n  ? 'Action needed today'\n  : (priority === 'warm' ? 'Keep in the pipeline' : 'Low priority');\nconst pain = Array.isArray(lead.pain_points) && lead.pain_points.length\n  ? lead.pain_points.join(', ')\n  : '\u2014';\nconst hitl = (priority === 'hot' || lead.follow_up_status === 'awaiting_approval')\n  ? '\\n\\n<i>A follow-up draft is waiting for human approval. This is a sales-team alert, not a customer message.</i>'\n  : '\\n\\n<i>This is a sales-team alert, not a customer message.</i>';\nconst text = [\n  badge + '  <b>' + headline + '</b>',\n  '',\n  '<b>' + esc(lead.name) + '</b> \u00b7 ' + esc(lead.company),\n  'CRM <code>#' + esc(lead.id) + '</code> \u00b7 ' + esc(lead.status),\n  esc(lead.email),\n  'Industry: ' + esc(lead.industry),\n  'Intent: ' + esc(lead.intent) + ' \u00b7 Fit: ' + esc(lead.product_fit),\n  '',\n  '<b>Summary</b>',\n  esc(lead.ai_summary),\n  '',\n  '<b>Next action</b>',\n  esc(lead.recommended_next_action),\n  '',\n  '<b>Pain points</b>',\n  esc(pain)\n].join('\\n') + hitl;\nlet reason = 'configured';\nif (!chat) reason = 'missing TELEGRAM_CHAT_ID';\nelse if (!wantAlert) reason = 'cold_skipped';\nreturn [{ json: {\n  telegram_action: enabled ? 'send' : 'skip',\n  telegram_reason: reason,\n  telegram_chat_id: chat || '',\n  telegram_text: text\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000040",
       "name": "Plan Telegram Sales Alert",
@@ -937,7 +943,7 @@
       "typeVersion": 2,
       "position": [
         5260,
-        160
+        320
       ]
     },
     {
@@ -970,7 +976,7 @@
       "typeVersion": 2.2,
       "position": [
         5480,
-        160
+        320
       ]
     },
     {
@@ -978,7 +984,8 @@
         "chatId": "={{ $json.telegram_chat_id }}",
         "text": "={{ $json.telegram_text }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "00000000-0000-4000-8000-000000000042",
@@ -987,7 +994,7 @@
       "typeVersion": 1.2,
       "position": [
         5700,
-        80
+        160
       ],
       "webhookId": "9cabb5ed-5a9f-414c-bda8-54e977e5c6b8",
       "credentials": {
@@ -999,18 +1006,65 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1500,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
-        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $('Get CRM Lead').first().json;\nconst draft = safe('Draft Follow-up (HITL)');\nconst plan = safe('Plan Telegram Sales Alert');\nconst sent = safe('Send a text message');\nconst sheetsPlan = safe('Plan Sheets Export');\nconst upserted = safe('Append or update row in sheet');\nlet telegramStatus = 'skipped_unconfigured';\nif (plan.telegram_action === 'send') {\n  telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';\n} else {\n  telegramStatus = 'skipped_unconfigured';\n}\nlet sheetsStatus = 'skipped_unconfigured';\nif (sheetsPlan.sheets_action === 'send') {\n  sheetsStatus = upserted.error ? 'failed' : 'exported';\n}\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: 'hot',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: draft.follow_up_status || lead.follow_up_status,\n  human_approval_required: true,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: telegramStatus,\n    whatsapp: 'awaiting_human_approval',\n    email: 'awaiting_human_approval',\n    google_sheets: sheetsStatus\n  },\n  errors: []\n} }];"
+        "jsCode": "const lead = $('Get CRM Lead').first().json;\nreturn [{ json: { ...lead } }];"
+      },
+      "id": "00000000-0000-4000-8000-000000000069",
+      "name": "Resume CRM Lead After Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5920,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c-70",
+              "leftValue": "={{ $json.priority }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "hot"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000070",
+      "name": "Assemble Hot Path?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6140,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $('Get CRM Lead').first().json;\nconst draft = safe('Draft Follow-up (HITL)');\nconst plan = safe('Plan Telegram Sales Alert');\nconst sent = safe('Send a text message');\nconst sheetsPlan = safe('Plan Sheets Export');\nconst upserted = safe('Append or update row in sheet');\nlet telegramStatus = 'skipped_unconfigured';\nif (plan.telegram_action === 'send') {\n  telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';\n} else if (plan.telegram_reason === 'cold_skipped') {\n  telegramStatus = 'skipped_cold';\n} else {\n  telegramStatus = 'skipped_unconfigured';\n}\nlet sheetsStatus = 'skipped_unconfigured';\nconst sheetsRan = Object.keys(upserted).length > 0;\nif (sheetsRan) {\n  sheetsStatus = upserted.error ? 'failed' : 'exported';\n}\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: 'hot',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: draft.follow_up_status || lead.follow_up_status,\n  human_approval_required: true,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: telegramStatus,\n    whatsapp: 'skipped',\n    email: 'skipped',\n    google_sheets: sheetsStatus\n  },\n  errors: []\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000043",
       "name": "Assemble Hot Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5940,
+        6360,
         160
       ]
     },
@@ -1025,20 +1079,20 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        6180,
+        6600,
         160
       ]
     },
     {
       "parameters": {
-        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $input.first().json;\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nconst sheetsPlan = safe('Plan Sheets Export');\nconst upserted = safe('Append or update row in sheet');\nlet sheetsStatus = 'skipped_unconfigured';\nif (sheetsPlan.sheets_action === 'send') {\n  sheetsStatus = upserted.error ? 'failed' : 'exported';\n}\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: lead.priority || 'unknown',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: lead.follow_up_status,\n  human_approval_required: false,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: 'not_applicable',\n    whatsapp: 'skipped_not_hot',\n    email: 'skipped_not_hot',\n    google_sheets: sheetsStatus\n  },\n  errors: []\n} }];"
+        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst lead = $input.first().json;\nconst pre = $('Parse & Validate LLM JSON').first().json.ai_prequalify;\nconst sheetsPlan = safe('Plan Sheets Export');\nconst upserted = safe('Append or update row in sheet');\nconst plan = safe('Plan Telegram Sales Alert');\nconst sent = safe('Send a text message');\nlet telegramStatus = 'skipped_unconfigured';\nif (plan.telegram_action === 'send') {\n  telegramStatus = (sent.ok === true || sent.result) ? 'sent' : 'failed';\n} else if (plan.telegram_reason === 'cold_skipped') {\n  telegramStatus = 'skipped_cold';\n} else {\n  telegramStatus = 'skipped_unconfigured';\n}\nlet sheetsStatus = 'skipped_unconfigured';\nconst sheetsRan = Object.keys(upserted).length > 0;\nif (sheetsRan) {\n  sheetsStatus = upserted.error ? 'failed' : 'exported';\n}\nreturn [{ json: {\n  outcome: 'processed',\n  skipped: false,\n  failed: false,\n  routed: lead.priority || 'unknown',\n  lead_id: lead.id,\n  external_id: lead.external_id,\n  priority: lead.priority,\n  status: lead.status,\n  follow_up_status: lead.follow_up_status,\n  human_approval_required: false,\n  ai_prequalify: pre,\n  channels: {\n    telegram_sales_alert: telegramStatus,\n    whatsapp: 'skipped_not_hot',\n    email: 'skipped_not_hot',\n    google_sheets: sheetsStatus\n  },\n  errors: []\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000045",
       "name": "Assemble Non-Hot Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5040,
+        6360,
         480
       ]
     },
@@ -1053,7 +1107,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        5280,
+        6600,
         480
       ]
     },
@@ -1124,7 +1178,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const lead = $input.first().json;\nreturn [{ json: {\n  outcome: 'approval_blocked',\n  skipped: true,\n  failed: false,\n  lead_id: lead.id,\n  follow_up_status: lead.follow_up_status,\n  errors: ['Follow-up cannot be sent until a draft exists and a human approves it'],\n  channels: { telegram_sales_alert: 'not_applicable', whatsapp: 'not_sent', email: 'not_sent' }\n} }];"
+        "jsCode": "const lead = $input.first().json;\nreturn [{ json: {\n  outcome: 'approval_blocked',\n  skipped: true,\n  failed: false,\n  lead_id: lead.id,\n  follow_up_status: lead.follow_up_status,\n  errors: ['Follow-up cannot be sent until a draft exists and a human approves it'],\n  channels: { telegram_sales_alert: 'not_applicable', telegram_followup: 'not_sent', email: 'not_sent' }\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000053",
       "name": "Respond Body \u2014 Approval Blocked",
@@ -1167,158 +1221,14 @@
     },
     {
       "parameters": {
-        "jsCode": "const approved = $input.first().json;\nconst lead = $('Load Lead For Approval').first().json;\nconst waPhone = $env.WHATSAPP_PHONE_NUMBER_ID;\nconst waTo = $env.WHATSAPP_TO;\nconst resend = $env.RESEND_API_KEY;\nconst emailFrom = $env.EMAIL_FROM;\nconst emailTo = lead.email;\nconst draft = lead.draft_message || '';\nconst waEnabled = Boolean(waPhone && waTo);\nconst emailEnabled = Boolean(resend && emailFrom && emailTo);\nreturn [{ json: {\n  approved,\n  lead_id: lead.id,\n  draft,\n  whatsapp_action: waEnabled ? 'send' : 'skip',\n  whatsapp_reason: waEnabled ? 'configured' : 'WhatsApp adapter unconfigured (n8n WhatsApp credential + WHATSAPP_PHONE_NUMBER_ID + WHATSAPP_TO)',\n  whatsapp_phone_number_id: waPhone || '',\n  whatsapp_to: waTo || '',\n  email_action: emailEnabled ? 'send' : 'skip',\n  email_reason: emailEnabled ? 'configured' : 'Email adapter unconfigured (RESEND_API_KEY, EMAIL_FROM)',\n  email_request: emailEnabled ? {\n    from: emailFrom,\n    to: [emailTo],\n    subject: 'Follow-up regarding ' + lead.company,\n    text: draft\n  } : null\n} }];"
-      },
-      "id": "00000000-0000-4000-8000-000000000056",
-      "name": "Plan Optional Delivery Adapters",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        960,
-        1200
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "c-57",
-              "leftValue": "={{ $json.whatsapp_action }}",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              },
-              "rightValue": "send"
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "00000000-0000-4000-8000-000000000057",
-      "name": "WhatsApp Adapter Enabled?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1200,
-        1100
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "send",
-        "phoneNumberId": "={{ $json.whatsapp_phone_number_id }}",
-        "recipientPhoneNumber": "={{ $json.whatsapp_to }}",
-        "textBody": "={{ $json.draft }}",
-        "additionalFields": {}
-      },
-      "id": "00000000-0000-4000-8000-000000000058",
-      "name": "Send message",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1.1,
-      "position": [
-        1440,
-        1000
-      ],
-      "webhookId": "a001fd79-a969-489c-8660-c88e2b81c466",
-      "credentials": {
-        "whatsAppApi": {
-          "id": "whatsapp-account",
-          "name": "WhatsApp account"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1500,
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "c-59",
-              "leftValue": "={{ $('Plan Optional Delivery Adapters').item.json.email_action }}",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              },
-              "rightValue": "send"
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "00000000-0000-4000-8000-000000000059",
-      "name": "Email Adapter Enabled?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1200,
-        1320
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.resend.com/emails",
-        "options": {
-          "timeout": 15000
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{$env.RESEND_API_KEY}}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $('Plan Optional Delivery Adapters').item.json.email_request }}"
-      },
-      "id": "00000000-0000-4000-8000-000000000060",
-      "name": "Send Email via Resend (optional)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1440,
-        1440
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1500,
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "function safe(name) { try { return $(name).first().json; } catch (e) { return {}; } }\nconst plan = $('Plan Optional Delivery Adapters').first().json;\nconst wa = safe('Send message');\nconst em = safe('Send Email via Resend (optional)');\nlet waStatus = plan.whatsapp_action === 'send' ? ((wa.messages || wa.ok || wa.id) ? 'sent' : 'failed') : 'skipped_unconfigured';\nlet emStatus = plan.email_action === 'send' ? ((em.id || em.ok) ? 'sent' : 'failed') : 'skipped_unconfigured';\nif (plan.whatsapp_action === 'send' && wa.error) waStatus = 'failed';\nif (plan.email_action === 'send' && em.error) emStatus = 'failed';\nreturn [{ json: {\n  outcome: 'approved',\n  lead_id: plan.lead_id,\n  crm_send_result: plan.approved.send_result || null,\n  follow_up_status: plan.approved.follow_up_status,\n  channels: {\n    backend_mock_send: plan.approved.send_result || 'unknown',\n    whatsapp: waStatus,\n    email: emStatus,\n    telegram_sales_alert: 'not_applicable',\n    google_sheets: 'not_applicable'\n  },\n  notes: [\n    'Customer-facing WhatsApp/email run only after explicit human approval.',\n    'Unconfigured adapters are skipped, not marked successful.'\n  ],\n  errors: []\n} }];"
+        "jsCode": "const approved = $input.first().json;\nreturn [{ json: {\n  outcome: 'approved',\n  lead_id: approved.lead_id,\n  crm_send_result: approved.send_result || null,\n  follow_up_status: approved.follow_up_status,\n  channels: {\n    backend_mock_send: approved.send_result || 'unknown',\n    telegram_followup: 'posted_by_backend',\n    google_sheets: 'not_applicable'\n  },\n  notes: [\n    'Human approval is done in the CRM dashboard.',\n    'The approved or rejected draft is posted to Telegram by the backend bot.'\n  ],\n  errors: []\n} }];"
       },
       "id": "00000000-0000-4000-8000-000000000061",
       "name": "Assemble Approval Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1680,
+        960,
         1200
       ]
     },
@@ -1333,7 +1243,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1920,
+        1200,
         1200
       ]
     }
@@ -1609,7 +1519,7 @@
       "main": [
         [
           {
-            "node": "Create sheet",
+            "node": "Ensure sheet headers",
             "type": "main",
             "index": 0
           }
@@ -1623,7 +1533,7 @@
         ]
       ]
     },
-    "Create sheet": {
+    "Ensure sheet headers": {
       "main": [
         [
           {
@@ -1667,7 +1577,7 @@
         ],
         [
           {
-            "node": "Assemble Non-Hot Result",
+            "node": "Plan Telegram Sales Alert",
             "type": "main",
             "index": 0
           }
@@ -1707,7 +1617,7 @@
         ],
         [
           {
-            "node": "Assemble Hot Result",
+            "node": "Resume CRM Lead After Telegram",
             "type": "main",
             "index": 0
           }
@@ -1718,7 +1628,36 @@
       "main": [
         [
           {
+            "node": "Resume CRM Lead After Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume CRM Lead After Telegram": {
+      "main": [
+        [
+          {
+            "node": "Assemble Hot Path?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Hot Path?": {
+      "main": [
+        [
+          {
             "node": "Assemble Hot Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assemble Non-Hot Result",
             "type": "main",
             "index": 0
           }
@@ -1799,75 +1738,6 @@
       ]
     },
     "Approve Follow-up in CRM": {
-      "main": [
-        [
-          {
-            "node": "Plan Optional Delivery Adapters",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Plan Optional Delivery Adapters": {
-      "main": [
-        [
-          {
-            "node": "WhatsApp Adapter Enabled?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "WhatsApp Adapter Enabled?": {
-      "main": [
-        [
-          {
-            "node": "Send message",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Email Adapter Enabled?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send message": {
-      "main": [
-        [
-          {
-            "node": "Email Adapter Enabled?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Email Adapter Enabled?": {
-      "main": [
-        [
-          {
-            "node": "Send Email via Resend (optional)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Assemble Approval Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Email via Resend (optional)": {
       "main": [
         [
           {

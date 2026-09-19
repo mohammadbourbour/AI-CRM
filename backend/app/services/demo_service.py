@@ -18,57 +18,57 @@ from app.services.notification_service import format_qualification_result_html, 
 STAGE_DEFS: list[dict[str, str]] = [
     {
         "id": "intake",
-        "label_fa": "ورود لید",
+        "label_fa": "Intake",
         "label_en": "Intake",
         "n8n_node": "Lead Intake Webhook",
     },
     {
         "id": "validate",
-        "label_fa": "اعتبارسنجی",
+        "label_fa": "Validate",
         "label_en": "Validate",
         "n8n_node": "Validate Incoming Lead",
     },
     {
         "id": "enrich",
-        "label_fa": "غنی‌سازی محلی",
+        "label_fa": "Enrich",
         "label_en": "Enrich",
         "n8n_node": "Optional Lead Enrichment",
     },
     {
         "id": "crm",
-        "label_fa": "ثبت در CRM",
+        "label_fa": "Persist",
         "label_en": "Persist",
         "n8n_node": "Create Lead in CRM",
     },
     {
         "id": "qualify",
-        "label_fa": "تحلیل AI + امتیاز قطعی",
+        "label_fa": "Qualify",
         "label_en": "Qualify",
         "n8n_node": "AI Agent → Backend Qualify Lead",
     },
     {
         "id": "sheets",
-        "label_fa": "خروجی Sheets",
+        "label_fa": "Sheets",
         "label_en": "Sheets",
-        "n8n_node": "Create sheet / Append or update row",
+        "n8n_node": "Ensure headers / Append or update row",
     },
     {
         "id": "route",
-        "label_fa": "مسیریابی",
+        "label_fa": "Route",
         "label_en": "Route",
         "n8n_node": "Priority Is Hot?",
     },
     {
         "id": "draft",
-        "label_fa": "پیش‌نویس HITL",
+        "label_fa": "Draft",
         "label_en": "Draft",
         "n8n_node": "Draft Follow-up (HITL)",
     },
     {
         "id": "telegram",
-        "label_fa": "کانال تلگرام",
+        "label_fa": "Telegram",
         "label_en": "Telegram",
-        "n8n_node": "Bot → channel (qualification result)",
+        "n8n_node": "Send a text message",
     },
 ]
 
@@ -221,6 +221,8 @@ def _apply_telegram_stage(stages: list[dict[str, Any]], telegram_status: str) ->
         _set_stage(stages, "telegram", "failed", "Telegram call failed. Qualification is still in CRM.")
     elif telegram_status == "not_applicable":
         _set_stage(stages, "telegram", "skipped", "No CRM lead — nothing to post.")
+    elif telegram_status == "skipped_cold":
+        _set_stage(stages, "telegram", "skipped", "Cold leads are not posted to Telegram.")
     else:
         _set_stage(
             stages,
@@ -423,6 +425,8 @@ def run_demo(db: Session, sample: str = "hot", lead_in: LeadCreate | None = None
         _set_stage(stages, "telegram", "done", "Result posted to the Telegram channel by the bot.")
     elif telegram_status == "failed":
         _set_stage(stages, "telegram", "failed", "Bot call failed. Qualification still saved in CRM.")
+    elif telegram_status == "skipped_cold":
+        _set_stage(stages, "telegram", "skipped", "Cold leads are not posted to Telegram.")
     else:
         _set_stage(
             stages,
@@ -494,14 +498,15 @@ def run_demo_via_n8n(
         return run, enrichment
 
     run.status = "completed"
-    if settings.telegram_enabled:
-        # Backend /qualify already posted; do not send a second copy.
-        run.telegram_status = "sent"
-    else:
-        run.telegram_status = "skipped_unconfigured"
     n8n_alert = str(channels.get("telegram_sales_alert") or "")
     if n8n_alert == "sent":
         run.telegram_status = "sent"
+    elif n8n_alert == "failed":
+        run.telegram_status = "failed"
+    elif n8n_alert == "skipped_cold":
+        run.telegram_status = "skipped_cold"
+    else:
+        run.telegram_status = "skipped_unconfigured"
     _apply_telegram_stage(stages, run.telegram_status)
     run.stages = stages
     db.commit()

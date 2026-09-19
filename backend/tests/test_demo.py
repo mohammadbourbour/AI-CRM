@@ -8,9 +8,9 @@ def test_dashboard_page(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "اتاق فرمان لید" in response.text
+    assert "Lead operations" in response.text
     assert "/assets/app.js" in response.text
-    assert "ارسال به n8n" in response.text
+    assert "Approval queue" in response.text
 
 
 def test_demo_meta(client: TestClient) -> None:

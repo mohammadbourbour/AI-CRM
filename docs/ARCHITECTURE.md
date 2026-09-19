@@ -1,6 +1,6 @@
 # Architecture
 
-Portfolio implementation of an AI-assisted sales and CRM automation workflow. It is a demo, not a production CRM.
+Inbound lead qualification and CRM automation. n8n orchestrates the workflow; FastAPI is the source of truth for persistence, priority, and follow-up state.
 
 ## Diagram
 
@@ -18,7 +18,7 @@ flowchart TD
     Normalize --> InsertLead[Insert_Lead]
     InsertLead -->|IntegrityError| ExistingLead[Return_existing_200]
     InsertLead -->|ok| NewLead[Return_new_lead]
-    n8n --> QualifyAPI["POST /api/leads/id/qualify"]
+    n8n --> QualifyAPI["POST /api/leads/id/qualify?notify=false"]
     QualifyAPI --> LLM[LLM_Provider]
     LLM --> Validate[Pydantic_Validation]
     Validate -->|fail| RetryOnce[Retry_once_with_error]
@@ -26,44 +26,38 @@ flowchart TD
     Validate -->|ok| PriorityRules[Deterministic_Priority]
     RetryOnce -->|ok| PriorityRules
     PriorityRules --> CRM[(SQLite_CRM)]
-    PriorityRules --> HotCheck{priority_hot?}
-    HotCheck -->|yes| Telegram[Telegram_from_qualify]
-    HotCheck -->|no| SkipNotify[No_notification]
     n8n --> SheetsPlan{Sheets_id_set?}
-    SheetsPlan -->|yes| CreateSheet[Official_Create_sheet]
-    CreateSheet --> UpsertRow[Append_or_update_row]
+    SheetsPlan -->|yes| EnsureHeaders[Ensure_sheet_headers]
+    EnsureHeaders --> UpsertRow[Append_or_update_row]
     SheetsPlan -->|no| SkipSheets[skipped_unconfigured]
     UpsertRow --> PriorityIF{n8n_IF_hot}
     SkipSheets --> PriorityIF
     PriorityIF -->|yes| FollowupDraft["POST /api/leads/id/followup/draft"]
     PriorityIF -->|no| SkipDraft[Skip_draft]
     FollowupDraft --> AwaitingApproval[awaiting_approval]
-    AwaitingApproval --> HumanApprove["approve webhook or API"]
-    HumanApprove --> MockSend[Backend_mock_send]
-    HumanApprove --> OptionalWA[WhatsApp_if_configured]
-    HumanApprove --> OptionalEmail[Email_if_configured]
+    n8n --> Telegram[Telegram_hot_or_warm]
+    AwaitingApproval --> HumanApprove["Dashboard approve or reject"]
+    HumanApprove --> TelegramDecision[Telegram_followup_decision]
 ```
 
 ## Responsibilities
 
 | Layer | Owns | Does not own |
 |-------|------|----------------|
-| n8n | Webhook intake, payload validation, local enrichment, official AI Agent pre-qualify, CRM HTTP orchestration, official Google Sheets upsert, official Telegram/WhatsApp adapters, HITL approve webhook | Deterministic CRM priority, SQLite persistence |
-| FastAPI | Validation, CRM, priority, HITL flag, backend Telegram on qualify | Visual orchestration |
+| n8n | Webhook intake, payload validation, local enrichment, AI Agent pre-qualify, CRM HTTP orchestration, Google Sheets upsert, Telegram sales alert | Deterministic CRM priority, SQLite persistence |
+| FastAPI | Validation, CRM, priority, HITL flag, Telegram on follow-up decisions | Canvas orchestration |
 | LLM | Intent, industry, pain points, summary, draft text | Database writes, sending messages, arbitrary tools |
 | SQLite | Lead records | Business rules |
 
 ## Notification paths
 
-Hot-lead **CRM** Telegram is still triggered **inside** `POST /api/leads/{id}/qualify` after the backend computes `priority == hot` (unchanged backend).
+n8n posts a sales-team Telegram alert for **hot** and **warm** leads when `TELEGRAM_CHAT_ID` is set. Cold leads are skipped. Intake calls `POST /api/leads/{id}/qualify?notify=false` so the backend does not send a second qualification message.
 
-n8n may send an **additional** sales-team Telegram alert only when `N8N_TELEGRAM_ALERTS=true` and Telegram credentials exist. Default is off so a local demo does not double-send or pretend a channel works.
+Dashboard **Approve** / **Reject** call FastAPI. The backend updates CRM and posts the decision (including the draft) to Telegram.
 
-Customer-facing WhatsApp and email run only on `POST /webhook/lead-approve` after a draft exists. Unconfigured adapters are skipped.
+After a successful qualify, n8n upserts the lead into Google Sheets when `GOOGLE_SHEETS_SPREADSHEET_ID` is set. Empty id skips with `channels.google_sheets = skipped_unconfigured`. FastAPI `POST /api/exports/google-sheets` can replace the worksheet with a full qualified-lead snapshot (service account) — CRM remains the source of truth.
 
-After a successful qualify, n8n upserts the lead into Google Sheets with the official **Create sheet** + **Append or update row** nodes when `GOOGLE_SHEETS_SPREADSHEET_ID` is set. Empty id skips with `channels.google_sheets = skipped_unconfigured`. FastAPI `POST /api/exports/google-sheets` can replace the worksheet with a full qualified-lead snapshot (service account) — CRM remains the source of truth.
-
-n8n never auto-sends follow-up copy on intake. Hot IF still calls `POST /api/leads/{id}/followup/draft` only for the CRM draft.
+n8n never auto-sends follow-up copy on intake. Hot routing calls `POST /api/leads/{id}/followup/draft` only to store the CRM draft.
 
 ## AI vs deterministic
 
@@ -121,7 +115,7 @@ not_started → awaiting_approval → approved → sent
 
 `draft_ready` is in the enum for completeness; the draft endpoint writes `awaiting_approval` directly.
 
-Approve then mock-send happen in one explicit human call: `POST /api/leads/{id}/approve-followup`. Reject (`POST /api/leads/{id}/reject-followup`) keeps the draft for audit, sets `skipped`, and never sends. There is no automatic send.
+Approve and reject happen from the dashboard (or `POST /api/leads/{id}/approve-followup` / `reject-followup`). Reject keeps the draft for audit, sets `skipped`, and never contacts the customer. The approved draft is posted to Telegram for the sales team. CRM follow-up status becomes `sent` (`mock_sent`).
 
 ## Providers
 

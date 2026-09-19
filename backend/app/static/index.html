@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>داشبورد تحلیل لید — AI Sales CRM</title>
+    <title>Lead operations — AI Sales CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Vazirmatn:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/assets/styles.css" />
@@ -15,10 +15,10 @@
   <body>
     <header class="top">
       <div>
-        <p class="eyebrow">نمونه‌کار زنده · n8n → FastAPI CRM → Telegram</p>
-        <h1>اتاق فرمان لید</h1>
+        <p class="eyebrow">AI Sales CRM</p>
+        <h1>Lead operations</h1>
         <p class="lede">
-          صبح: اول در n8n دکمه Publish را بزنید، بعد از اینجا یک سناریو بفرستید. اجرا را در n8n می‌بینید؛ نتیجه در این داشبورد، کانال تلگرام و Google Sheets می‌آید.
+          Qualify inbound leads, persist them in CRM, notify the sales channel, and approve follow-up before any customer-facing send.
         </p>
       </div>
       <ul class="health" id="health"></ul>
@@ -26,56 +26,46 @@
 
     <section class="controls">
       <div class="control-copy">
-        <h2>سناریوهای قابل توضیح</h2>
+        <h2>Run a sample lead</h2>
         <p>
-          مسیر پیش‌فرض <b>ارسال به n8n</b> است. قبل از کلیک، در n8n صفحهٔ Executions را باز بگذارید تا گره به گره ببینید.
+          Each run is sent through n8n, then written to CRM. Hot leads produce a draft that waits in the approval queue.
         </p>
-        <fieldset class="via">
-          <legend>مسیر اجرا</legend>
-          <label><input type="radio" name="via" value="n8n" checked /> ارسال به n8n (برای مصاحبه)</label>
-          <label><input type="radio" name="via" value="crm" /> مستقیم CRM (اگر n8n خاموش است)</label>
-        </fieldset>
       </div>
       <div class="buttons">
-        <button type="button" class="ghost" data-sample="invalid">رد اعتبارسنجی</button>
-        <button type="button" data-sample="cold">لید سرد · Cold</button>
-        <button type="button" data-sample="warm">لید گرم · Warm</button>
-        <button type="button" data-sample="hot">لید داغ · Hot</button>
+        <button type="button" class="ghost" data-sample="invalid">Invalid payload</button>
+        <button type="button" data-sample="cold">Cold</button>
+        <button type="button" data-sample="warm">Warm</button>
+        <button type="button" data-sample="hot">Hot</button>
       </div>
     </section>
 
     <ol class="pipeline" id="pipeline"></ol>
 
-    <section class="grid three">
-      <article class="panel script-panel">
-        <h2>چی توضیح بدهم؟</h2>
-        <ol class="talk" id="talk">
-          <li>مسئله: لید خام از فرم/سایت بدون اولویت وارد فروش می‌شود.</li>
-          <li>n8n را Publish کنید؛ این سایت payload را به webhook می‌فرستد.</li>
-          <li>اگر داده ناقص باشد، قبل از دیتابیس رد می‌شود.</li>
-          <li>خروجی LLM با اسکیما چک می‌شود؛ اولویت را مدل ذخیره نمی‌کند.</li>
-          <li>داغ → پیش‌نویس؛ انسان قبول یا رد می‌کند. مشتری هنوز پیامی نگرفته.</li>
-          <li>تلگرام نتیجه تیم فروش است؛ اگر ربات نباشد، skip صادقانه است نه موفقیت جعلی.</li>
-        </ol>
-      </article>
+    <section class="grid">
       <article class="panel timeline-panel">
-        <h2>تایم‌لاین اجرا</h2>
+        <h2>Run log</h2>
         <ol id="timeline" class="timeline"></ol>
       </article>
       <article class="panel result-panel">
-        <h2>نتیجه و تصمیم</h2>
-        <div id="result" class="result empty">یک سناریو را اجرا کنید.</div>
+        <h2>Latest result</h2>
+        <div id="result" class="result empty">Run a sample to see qualification output.</div>
       </article>
     </section>
 
+    <section class="panel hitl-panel">
+      <h2>Approval queue</h2>
+      <p class="lede">
+        Hot leads wait here. Approve posts the draft to the Telegram sales channel. Reject keeps the draft in CRM and does not contact the customer.
+      </p>
+      <div id="hitl-queue" class="hitl-queue empty">No drafts waiting for approval.</div>
+    </section>
+
     <section class="panel board-panel">
-      <h2>تخته CRM</h2>
+      <h2>Pipeline board</h2>
       <div class="board" id="board"></div>
     </section>
 
-    <footer>
-      n8n ارکستراسیون · FastAPI منبع حقیقت · قبول/رد انسانی قبل از پیام مشتری · Git و Docker برای نگهداری
-    </footer>
+    <footer>n8n orchestration · FastAPI CRM · Human approval before customer send</footer>
     <script src="/assets/app.js"></script>
   </body>
 </html>
