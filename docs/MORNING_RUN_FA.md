@@ -128,7 +128,7 @@ GOOGLE_SHEETS_WORKSHEET=Qualified Leads
 ```
 
 4. `docker compose up -d --force-recreate`
-5. n8n → **Credentials** → Add → **Google Sheets OAuth2 API** → Sign in with Google (همان جیمیل).
+5. n8n → **Credentials** → Add → **Google Sheets OAuth2 API**. Client ID/Secret از `.env` تزریق می‌شود؛ فقط **Sign in with Google** را بزنید (همان جیمیل Test user).
 6. گردش Lead Qualification را باز کنید:
    - گره **Create sheet** → credential گوگل
    - گره **Append or update row in sheet** → همان credential

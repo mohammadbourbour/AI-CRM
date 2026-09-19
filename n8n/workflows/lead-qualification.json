@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "content": "## 3. AI qualification\nOfficial AI Agent + Groq Chat Model (`llama-3.1-8b-instant`).\nSkipped honestly when `GROQ_API_KEY` / credential is missing.",
+        "content": "## 3. AI qualification\nOfficial AI Agent + Groq Chat Model (`openai/gpt-oss-20b`).\nSkipped honestly when `GROQ_API_KEY` / credential is missing.",
         "width": 820,
         "height": 180,
         "color": 6
@@ -302,7 +302,7 @@
     },
     {
       "parameters": {
-        "model": "llama-3.1-8b-instant",
+        "model": "openai/gpt-oss-20b",
         "options": {
           "temperature": 0,
           "maxTokensToSample": 1024

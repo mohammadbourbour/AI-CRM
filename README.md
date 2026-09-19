@@ -303,6 +303,7 @@ Copy [`.env.example`](.env.example). Empty optional keys disable that provider; 
 | `WHATSAPP_*` | Official WhatsApp node after approval |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Email after approval |
 | `GOOGLE_SHEETS_SPREADSHEET_ID` / `GOOGLE_SHEETS_WORKSHEET` | Official n8n Sheets upsert |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | n8n Google OAuth (injected; do not paste in the UI) |
 | `GOOGLE_SHEETS_CREDENTIALS_FILE` / `_JSON` | Backend batch snapshot only |
 | `WEBHOOK_SECRET` | Demo shared secret for `X-Webhook-Secret` |
 

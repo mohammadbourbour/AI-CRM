@@ -144,7 +144,7 @@ class GroqProvider:
     def __init__(self, settings: Settings) -> None:
         from openai import OpenAI
 
-        self._model = settings.groq_model.strip() or "llama-3.1-8b-instant"
+        self._model = settings.groq_model.strip() or "openai/gpt-oss-20b"
         self._client = OpenAI(
             api_key=settings.groq_api_key,
             base_url=settings.groq_base_url.strip() or "https://api.groq.com/openai/v1",

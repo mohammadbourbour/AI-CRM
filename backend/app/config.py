@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/crm.db"
     groq_api_key: str = ""
-    groq_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "openai/gpt-oss-20b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

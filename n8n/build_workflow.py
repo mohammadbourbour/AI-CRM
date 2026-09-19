@@ -559,7 +559,7 @@ def groq_chat_model(i, name, x, y):
         x,
         y,
         {
-            "model": "llama-3.1-8b-instant",
+            "model": "openai/gpt-oss-20b",
             "options": {"temperature": 0, "maxTokensToSample": 1024},
         },
         {"credentials": GROQ_CRED},
@@ -720,7 +720,7 @@ def build():
     nodes = [
         sticky(1, "Group: Intake", "## 1. Intake & validation\nReject bad payloads before CRM or LLM calls.", -120, 180, 420, 200, 5),
         sticky(2, "Group: Enrichment", "## 2. Optional enrichment\nLocal domain/seniority only. No fake Clearbit success.", 420, 40, 380, 160, 6),
-        sticky(3, "Group: AI qualification", "## 3. AI qualification\nOfficial AI Agent + Groq Chat Model (`llama-3.1-8b-instant`).\nSkipped honestly when `GROQ_API_KEY` / credential is missing.", 860, 0, 820, 180, 6),
+        sticky(3, "Group: AI qualification", "## 3. AI qualification\nOfficial AI Agent + Groq Chat Model (`openai/gpt-oss-20b`).\nSkipped honestly when `GROQ_API_KEY` / credential is missing.", 860, 0, 820, 180, 6),
         sticky(4, "Group: CRM", "## 4. CRM orchestration\nBackend is source of truth for persist, qualify, priority.\nHTTP Request stays here (no official FastAPI node).", 1760, 40, 560, 180, 4),
         sticky(8, "Group: Sheets", "## 4b. Google Sheets export\nOfficial **Create sheet** then **Append or update row** by CRM `id`.\nEmpty `GOOGLE_SHEETS_SPREADSHEET_ID` skips; tab-exists errors continue.", 3360, 0, 1280, 180, 4),
         sticky(5, "Group: Routing HITL", "## 5. Routing & HITL\nHot: draft only. Official Telegram node for sales alert.\nCustomer WhatsApp waits for `/webhook/lead-approve`.", 4700, 0, 620, 180, 3),

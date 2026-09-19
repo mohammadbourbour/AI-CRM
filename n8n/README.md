@@ -9,7 +9,7 @@ This workflow is truthful: missing API keys are skipped, not faked as successful
 - Webhook intake (`/webhook/lead-intake`)
 - Payload validation before CRM
 - Optional local lead enrichment (domain / seniority — no fake enrichment API)
-- Official **AI Agent** + **Groq Chat Model** (`llama-3.1-8b-instant`) for structured pre-qualification
+- Official **AI Agent** + **Groq Chat Model** (`openai/gpt-oss-20b`) for structured pre-qualification
 - JSON parse + schema checks before CRM writes
 - Official **Telegram** node for the optional sales alert
 - Official **WhatsApp Business Cloud** node after human approval
@@ -73,7 +73,7 @@ Customer follow-up text is never auto-sent.
    - **Groq Chat Model** → Groq account (API key from [console.groq.com](https://console.groq.com/keys))
    - **Send a text message** → Telegram account (already wired to `Telegram account` if that credential exists)
    - **Send message** → WhatsApp account
-   - **Create sheet** and **Append or update row in sheet** → Google Sheets OAuth2 account
+   - **Create sheet** and **Append or update row in sheet** → Google Sheets OAuth2 (Client ID/Secret come from `.env`; only **Sign in with Google** is needed)
 5. **Publish / activate** the workflow. Until you Publish, the dashboard `via=n8n` path returns 503 (`webhook is not registered`).
 
 Morning interview steps (Persian): [../docs/MORNING_RUN_FA.md](../docs/MORNING_RUN_FA.md)
@@ -105,6 +105,11 @@ Passed through `docker-compose.yml`:
 | `RESEND_API_KEY` / `EMAIL_FROM` | Optional email send after approval (HTTP — Resend has no official n8n node) |
 | `GOOGLE_SHEETS_SPREADSHEET_ID` | Spreadsheet for the official Sheets nodes. Empty → skip export |
 | `GOOGLE_SHEETS_WORKSHEET` | Tab name (default `Qualified Leads`). Create sheet makes it if missing |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Injected into n8n as `CREDENTIALS_OVERWRITE_DATA` so you do not paste OAuth secrets in the UI |
+
+`$env.VAR` in the editor shows `[ERROR: not accessible via UI, please run node]`. That is a preview limitation. Execute the node or run the workflow; the value is read at runtime.
+
+Do not put `GROQ_BASE_URL=https://api.groq.com/openai/v1` on the n8n Groq credential. The Groq node already appends `/openai/v1`.
 
 Empty keys → skip that provider/channel and say so in the JSON response.
 

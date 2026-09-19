@@ -30,4 +30,5 @@ examples/dataset/last_run_summary.json
 # Google service-account keys (never commit)
 *service-account*.json
 google-credentials.json
+client_secret*.json
 secrets/
